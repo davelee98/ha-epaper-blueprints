@@ -1,0 +1,493 @@
+blueprint:
+  name: "OEPL Weather for Chroma 7.4 BWY (640x384)"
+  description: >
+    Current weather + 5-day forecast for a Chroma 7.4" e-paper display (640x384, BWY).
+    Pulls data from weather.forecast_home and sun.sun.
+    Requires Jost-SemiBold.ttf and Jost-Medium.ttf at /config/www/fonts/.
+  domain: automation
+  input:
+    location_string:
+      name: Location Name
+      description: "Label displayed at the top of the screen (e.g. 'Chicago, Illinois')"
+      selector:
+        text:
+    device_id:
+      name: Display Device
+      description: "device_id of the OpenDisplay e-paper target for open_epaper_link.drawcustom"
+      selector:
+        device:
+
+triggers:
+  - trigger: time_pattern
+    hours: /1
+
+actions:
+  - action: weather.get_forecasts
+    data:
+      type: daily
+    target:
+      entity_id: weather.forecast_home
+    response_variable: forecast
+  - variables:
+      _location: !input location_string
+      _font_main: "/config/www/fonts/Jost-SemiBold.ttf"
+      _font_small: "/config/www/fonts/Jost-Medium.ttf"
+      _cicons: >-
+        {%- macro cond_icon(condition, is_day=true) -%}
+          {%- set m = {
+            'sunny': 'mdi:weather-sunny',
+            'clear-night': 'mdi:weather-night',
+            'partlycloudy': 'mdi:weather-partly-cloudy' if is_day else 'mdi:weather-night-partly-cloudy',
+            'cloudy': 'mdi:weather-cloudy',
+            'fog': 'mdi:weather-fog',
+            'rainy': 'mdi:weather-rainy',
+            'pouring': 'mdi:weather-pouring',
+            'lightning': 'mdi:weather-lightning',
+            'lightning-rainy': 'mdi:weather-lightning-rainy',
+            'snowy': 'mdi:weather-snowy',
+            'snowy-rainy': 'mdi:weather-snowy-rainy',
+            'hail': 'mdi:weather-hail',
+            'windy': 'mdi:weather-windy',
+            'windy-variant': 'mdi:weather-windy-variant',
+            'exceptional': 'mdi:weather-cloudy'
+          } -%}
+          {{ m.get(condition, 'mdi:weather-cloudy') }}
+        {%- endmacro -%}
+        {%- set sun_el = state_attr('sun.sun','elevation') -%}
+        {%- set is_day = sun_el | float(0) > 0 -%}
+        {%- set fc = forecast['weather.forecast_home'].forecast -%}
+        {{ {
+          'current': cond_icon(states('weather.forecast_home'), is_day) | trim,
+          'fc1': cond_icon(fc[1].condition) | trim,
+          'fc2': cond_icon(fc[2].condition) | trim,
+          'fc3': cond_icon(fc[3].condition) | trim,
+          'fc4': cond_icon(fc[4].condition) | trim,
+          'fc5': cond_icon(fc[5].condition) | trim
+        } | tojson }}
+
+  - action: open_epaper_link.drawcustom
+    data:
+      background: white
+      dither: 1
+      rotate: 0
+      payload:
+
+        # =====================
+        # HEADER (y 0–40)
+        # =====================
+        - type: text
+          value: "{{ _location }}"
+          x: 320
+          y: 10
+          size: 26
+          color: black
+          font: "{{ _font_main }}"
+          anchor: mt
+        - type: text
+          value: >-
+            {%- set d = now().day -%}
+            {%- set sfx = 'th' if 11 <= d <= 13 else ('st' if d % 10 == 1 else ('nd' if d % 10 == 2 else ('rd' if d % 10 == 3 else 'th'))) -%}
+            {{ now().strftime('%A, %B ') }}{{ d }}{{ sfx }} as of {{ now().strftime('%-I:%M %p') }}
+          x: 320
+          y: 35
+          size: 16
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mt
+
+        # =====================
+        # CURRENT — LEFT PANEL (x 0–287, y 37–243)
+        # Weather icon + large temperature
+        # =====================
+        - type: icon
+          value: "{{ _cicons['current'] }}"
+          x: 16
+          y: 72
+          size: 144
+          color: black
+        - type: text
+          value: "{{ state_attr('weather.forecast_home', 'temperature') | round(0) | int }}°"
+          x: 176
+          y: 104
+          size: 64
+          color: black
+          font: "{{ _font_main }}"
+          anchor: lt
+        - type: text
+          value: "{{ forecast['weather.forecast_home'].forecast[0].temperature | round(0) | int }} /"
+          x: 228
+          y: 184
+          size: 22
+          color: black
+          font: "{{ _font_main }}"
+          anchor: rm
+        - type: text
+          value: "{{ forecast['weather.forecast_home'].forecast[0].templow | round(0) | int }}"
+          x: 236
+          y: 184
+          size: 22
+          color: black
+          font: "{{ _font_main }}"
+          anchor: lm
+
+        # =====================
+        # CURRENT — RIGHT PANEL (x 304–639, y 60–244)
+        # 2-column × 3-row weather details
+        # Left col (x 304–471): Sunrise, Humidity, Precip
+        # Right col (x 472–639): Sunset, Wind, Pressure
+        # Row tops: 66, 120, 174 | icon 28×28 | legend size:13, value size:19
+        # =====================
+
+        # ── LEFT COL ROW 1: Sunrise ──
+        - type: icon
+          value: mdi:weather-sunset-up
+          x: 312
+          y: 72
+          size: 32
+          color: black
+        - type: text
+          value: "Sunrise"
+          x: 392
+          y: 78
+          size: 14
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+        - type: text
+          value: "{{ as_timestamp(state_attr('sun.sun', 'next_rising')) | timestamp_custom('%-I:%M %p') }}"
+          x: 392
+          y: 100
+          size: 20
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+
+        # ── LEFT COL ROW 2: Humidity ──
+        - type: icon
+          value: mdi:water
+          x: 312
+          y: 128
+          size: 32
+          color: black
+        - type: text
+          value: "Humidity"
+          x: 392
+          y: 134
+          size: 14
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+        - type: text
+          value: "{{ state_attr('weather.forecast_home', 'humidity') | round(0) | int }}%"
+          x: 392
+          y: 156
+          size: 20
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+
+        # ── LEFT COL ROW 3: Precipitation ──
+        - type: icon
+          value: mdi:water-percent
+          x: 312
+          y: 184
+          size: 40
+          color: black
+        - type: text
+          value: "Precipitation"
+          x: 392
+          y: 190
+          size: 14
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+        - type: text
+          value: "{{ forecast['weather.forecast_home'].forecast[1].precipitation_probability | default(0) | int }}%"
+          x: 392
+          y: 212
+          size: 20
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+
+        # ── RIGHT COL ROW 1: Sunset ──
+        - type: icon
+          value: mdi:weather-sunset-down
+          x: 482
+          y: 72
+          size: 32
+          color: black
+        - type: text
+          value: "Sunset"
+          x: 562
+          y: 78
+          size: 14
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+        - type: text
+          value: "{{ as_timestamp(state_attr('sun.sun', 'next_setting')) | timestamp_custom('%-I:%M %p') }}"
+          x: 562
+          y: 100
+          size: 20
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+
+        # ── RIGHT COL ROW 2: Wind ──
+        - type: icon
+          value: mdi:weather-windy
+          x: 482
+          y: 128
+          size: 32
+          color: black
+        - type: text
+          value: "Wind"
+          x: 562
+          y: 134
+          size: 14
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+        - type: text
+          value: "{{ state_attr('weather.forecast_home', 'wind_speed') | round(0) | int }} mph"
+          x: 562
+          y: 156
+          size: 20
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+
+        # ── RIGHT COL ROW 3: Pressure ──
+        - type: icon
+          value: mdi:gauge
+          x: 482
+          y: 184
+          size: 32
+          color: black
+        - type: text
+          value: "Pressure"
+          x: 562
+          y: 190
+          size: 14
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+        - type: text
+          value: "{{ state_attr('weather.forecast_home', 'pressure') | round(0) | int }} hPa"
+          x: 562
+          y: 212
+          size: 20
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+
+        # =====================
+        # FORECAST STRIP (y 245–383)
+        # 5 rounded boxes × 120 px | centers: 64, 192, 320, 448, 576
+        # =====================
+        - type: rectangle
+          x_start: 4
+          y_start: 247
+          x_end: 124
+          y_end: 382
+          radius: 16
+          outline: black
+          width: 2
+        - type: rectangle
+          x_start: 132
+          y_start: 247
+          x_end: 252
+          y_end: 382
+          radius: 16
+          outline: black
+          width: 2
+        - type: rectangle
+          x_start: 260
+          y_start: 247
+          x_end: 380
+          y_end: 382
+          radius: 16
+          outline: black
+          width: 2
+        - type: rectangle
+          x_start: 388
+          y_start: 247
+          x_end: 508
+          y_end: 382
+          radius: 16
+          outline: black
+          width: 2
+        - type: rectangle
+          x_start: 516
+          y_start: 247
+          x_end: 636
+          y_end: 382
+          radius: 16
+          outline: black
+          width: 2
+
+        # ─── FORECAST DAY 1 (center x 64) ───
+        - type: text
+          value: "{{ as_timestamp(forecast['weather.forecast_home'].forecast[1].datetime) | timestamp_custom('%a') | upper }}"
+          x: 64
+          y: 260
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: mt
+        - type: icon
+          value: "{{ _cicons['fc1'] }}"
+          x: 38
+          y: 280
+          size: 52
+          color: black
+        - type: text
+          value: "{{ forecast['weather.forecast_home'].forecast[1].temperature | round(0) | int }} /"
+          x: 70
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: rm
+        - type: text
+          value: "{{ forecast['weather.forecast_home'].forecast[1].templow | round(0) | int }}"
+          x: 74
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: lm
+
+        # ─── FORECAST DAY 2 (center x 192) ───
+        - type: text
+          value: "{{ as_timestamp(forecast['weather.forecast_home'].forecast[2].datetime) | timestamp_custom('%a') | upper }}"
+          x: 192
+          y: 260
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: mt
+        - type: icon
+          value: "{{ _cicons['fc2'] }}"
+          x: 166
+          y: 280
+          size: 52
+          color: black
+        - type: text
+          value: "{{ forecast['weather.forecast_home'].forecast[2].temperature | round(0) | int }} /"
+          x: 198
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: rm
+        - type: text
+          value: "{{ forecast['weather.forecast_home'].forecast[2].templow | round(0) | int }}"
+          x: 202
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: lm
+
+        # ─── FORECAST DAY 3 (center x 320) ───
+        - type: text
+          value: "{{ as_timestamp(forecast['weather.forecast_home'].forecast[3].datetime) | timestamp_custom('%a') | upper }}"
+          x: 320
+          y: 260
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: mt
+        - type: icon
+          value: "{{ _cicons['fc3'] }}"
+          x: 294
+          y: 280
+          size: 52
+          color: black
+        - type: text
+          value: "{{ forecast['weather.forecast_home'].forecast[3].temperature | round(0) | int }} /"
+          x: 326
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: rm
+        - type: text
+          value: "{{ forecast['weather.forecast_home'].forecast[3].templow | round(0) | int }}"
+          x: 330
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: lm
+
+        # ─── FORECAST DAY 4 (center x 448) ───
+        - type: text
+          value: "{{ as_timestamp(forecast['weather.forecast_home'].forecast[4].datetime) | timestamp_custom('%a') | upper }}"
+          x: 448
+          y: 260
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: mt
+        - type: icon
+          value: "{{ _cicons['fc4'] }}"
+          x: 422
+          y: 280
+          size: 52
+          color: black
+        - type: text
+          value: "{{ forecast['weather.forecast_home'].forecast[4].temperature | round(0) | int }} /"
+          x: 454
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: rm
+        - type: text
+          value: "{{ forecast['weather.forecast_home'].forecast[4].templow | round(0) | int }}"
+          x: 458
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: lm
+
+        # ─── FORECAST DAY 5 (center x 576) ───
+        - type: text
+          value: "{{ as_timestamp(forecast['weather.forecast_home'].forecast[5].datetime) | timestamp_custom('%a') | upper }}"
+          x: 576
+          y: 260
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: mt
+        - type: icon
+          value: "{{ _cicons['fc5'] }}"
+          x: 550
+          y: 280
+          size: 52
+          color: black
+        - type: text
+          value: "{{ forecast['weather.forecast_home'].forecast[5].temperature | round(0) | int }} /"
+          x: 582
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: rm
+        - type: text
+          value: "{{ forecast['weather.forecast_home'].forecast[5].templow | round(0) | int }}"
+          x: 586
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: lm
+
+    target:
+      device_id: !input device_id
+
+mode: restart
