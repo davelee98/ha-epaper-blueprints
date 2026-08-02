@@ -244,6 +244,24 @@ blueprint:
         blueprint does not set, so a slower interval reduces images sent rather
         than radio traffic.
 
+        LABEL SIZING
+
+        Each detail label is centred between its row icon and the column edge,
+        so the icon sets the width budget and each label is sized on its own
+        wording. Only a label that would run under its icon is stepped down;
+        the rest keep full size. In French, for example, Coucher du soleil
+        shrinks while Vent, Humidité and Pression do not, so the two columns
+        can differ in size.
+
+        CJK glyphs are full-em rather than half, so they count double, which
+        still leaves them at full size since the wording is short.
+
+        Text typed into Custom Labels feeds the same calculation, so a long
+        override shrinks only its own row. This is an estimate from character
+        counts, not real text metrics: drawcustom cannot measure a rendered
+        string, so treat it as protection against gross overflow rather than a
+        guarantee.
+
         FONTS
 
         Jost-SemiBold.ttf and Jost-Medium.ttf go in /config/www/fonts/. Create
@@ -390,6 +408,7 @@ actions:
           'days': od if od | length == 7 else base.days,
           'date_fmt': fb.date,
           'dec': fb.dec,
+          'wide': 'y' if _lang in ['zh-Hans', 'ja', 'ko'] else 'n',
           'wdays': ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
                    if _lang == 'en' else [],
           'months': ['January','February','March','April','May','June','July',
@@ -400,6 +419,20 @@ actions:
       _12h: >-
         {{ 'y' if _tf == '12' or (_tf == 'auto'
            and (now().tzinfo | string).startswith('America/')) else 'n' }}
+      # Each detail label is centred between its row icon and the column edge,
+      # so the icon sets the width budget. Sized per label: only the ones that
+      # would run under the icon shrink. CJK glyphs are full-em, hence em=2.
+      _lblsizes: >-
+        {%- set b = _i18n -%}
+        {%- set em = 2 if b['wide'] == 'y' else 1 -%}
+        {{ {
+          'sunrise':  [[18, (240 / ((b['sunrise'] | length) * em)) | int] | min, 11] | max,
+          'sunset':   [[18, (240 / ((b['sunset'] | length) * em)) | int] | min, 11] | max,
+          'humidity': [[18, (240 / ((b['humidity'] | length) * em)) | int] | min, 11] | max,
+          'precip':   [[18, (240 / ((b['precip'] | length) * em)) | int] | min, 11] | max,
+          'wind':     [[18, (240 / ((b['wind'] | length) * em)) | int] | min, 11] | max,
+          'pressure': [[18, (240 / ((b['pressure'] | length) * em)) | int] | min, 11] | max
+        } | tojson }}
       _dec: >-
         {%- if _o_dec == 'period' -%}.
         {%- elif _o_dec == 'comma' -%},
@@ -557,7 +590,7 @@ actions:
           value: "{{ _i18n['sunrise'] }}"
           x: 490
           y: 98
-          size: 18
+          size: "{{ _lblsizes['sunrise'] }}"
           color: black
           font: "{{ _font_small }}"
           anchor: mm
@@ -583,7 +616,7 @@ actions:
           value: "{{ _i18n['humidity'] }}"
           x: 490
           y: 168
-          size: 18
+          size: "{{ _lblsizes['humidity'] }}"
           color: black
           font: "{{ _font_small }}"
           anchor: mm
@@ -607,7 +640,7 @@ actions:
           value: "{{ _i18n['precip'] }}"
           x: 490
           y: 238
-          size: 18
+          size: "{{ _lblsizes['precip'] }}"
           color: black
           font: "{{ _font_small }}"
           anchor: mm
@@ -631,7 +664,7 @@ actions:
           value: "{{ _i18n['sunset'] }}"
           x: 702
           y: 98
-          size: 18
+          size: "{{ _lblsizes['sunset'] }}"
           color: black
           font: "{{ _font_small }}"
           anchor: mm
@@ -657,7 +690,7 @@ actions:
           value: "{{ _i18n['wind'] }}"
           x: 702
           y: 168
-          size: 18
+          size: "{{ _lblsizes['wind'] }}"
           color: black
           font: "{{ _font_small }}"
           anchor: mm
@@ -681,7 +714,7 @@ actions:
           value: "{{ _i18n['pressure'] }}"
           x: 702
           y: 238
-          size: 18
+          size: "{{ _lblsizes['pressure'] }}"
           color: black
           font: "{{ _font_small }}"
           anchor: mm
