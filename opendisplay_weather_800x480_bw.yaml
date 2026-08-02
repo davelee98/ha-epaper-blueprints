@@ -68,7 +68,7 @@ actions:
   - action: opendisplay.drawcustom
     data:
       background: white
-      dither: 0
+      dither: none
       rotate: 0
       payload:
 
