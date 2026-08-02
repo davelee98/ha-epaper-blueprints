@@ -28,6 +28,17 @@ blueprint:
     without shipping 12 unreviewed month names per language. Any language can
     be given a full pattern through the Header Date Line override.
 
+    The update schedule is set by the two Update Interval inputs, which map
+    onto a single time_pattern trigger. Hours alone gives hourly or slower;
+    setting Hours to "Any hour" and choosing a Minutes value gives sub-hourly.
+    Seconds default to zero whenever minutes are set, so a trigger never fires
+    more than once a minute.
+
+    Note this controls how often Home Assistant renders and sends an image, not
+    how often the tag wakes up. That is the integration's ttl, which this
+    blueprint does not set, so a slower interval reduces images sent rather
+    than radio traffic.
+
     Requires Jost-SemiBold.ttf and Jost-Medium.ttf at /config/www/fonts/.
     Create that directory if it does not exist; it is searched by default but
     is not created by Home Assistant.
@@ -147,6 +158,42 @@ blueprint:
       description: "device_id of the OpenDisplay e-paper target for opendisplay.drawcustom"
       selector:
         device:
+    update_hours:
+      name: Update Interval — Hours
+      description: >
+        Pair this with Minutes below. For hourly or slower, choose an hours
+        value here and leave Minutes on "On the hour". For sub-hourly, set this
+        to "Any hour" and choose a Minutes value. Mixing the two, for example
+        every 2 hours with every 30 minutes, gives two updates inside each even
+        hour and none in odd hours.
+      default: "/1"
+      selector:
+        select:
+          options:
+            - {value: "*", label: "Any hour (for sub-hourly updates)"}
+            - {value: "/1", label: "Every hour"}
+            - {value: "/2", label: "Every 2 hours"}
+            - {value: "/3", label: "Every 3 hours"}
+            - {value: "/4", label: "Every 4 hours"}
+            - {value: "/6", label: "Every 6 hours"}
+            - {value: "/8", label: "Every 8 hours"}
+            - {value: "/12", label: "Every 12 hours"}
+    update_minutes:
+      name: Update Interval — Minutes
+      description: >
+        Leave on "On the hour" unless Hours is set to "Any hour". Sub-hourly
+        updates are hard on an e-paper panel: every refresh cycles it, and on a
+        battery tag it shows in the battery life.
+      default: "0"
+      selector:
+        select:
+          options:
+            - {value: "0", label: "On the hour"}
+            - {value: "/30", label: "Every 30 minutes"}
+            - {value: "/20", label: "Every 20 minutes"}
+            - {value: "/15", label: "Every 15 minutes"}
+            - {value: "/10", label: "Every 10 minutes"}
+            - {value: "/5", label: "Every 5 minutes"}
     label_overrides:
       name: Custom Labels
       icon: mdi:translate
@@ -210,7 +257,8 @@ blueprint:
 
 triggers:
   - trigger: time_pattern
-    hours: /1
+    hours: !input update_hours
+    minutes: !input update_minutes
 
 actions:
   - action: weather.get_forecasts
