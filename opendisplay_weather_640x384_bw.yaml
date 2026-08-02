@@ -1,0 +1,830 @@
+blueprint:
+  name: "OpenDisplay Weather for 640x384 BW"
+  description: >
+    Current weather + 5-day forecast for a 640x384 e-paper display, such as the
+    Chroma 7.4in. Draws in black only, so it also suits a BWY panel without
+    using the accent colour.
+    Pulls data from the selected weather entity and sun.sun.
+
+    Sunrise/sunset and the day/night icon variants come from sun.sun, which
+    always follows the home location set in Home Assistant. If the selected
+    weather entity is for a different location, those sun times will still be
+    for home. Home Assistant allows only one sun entity, so this is not
+    configurable.
+
+    Requires the OpenDisplay HACS custom integration, minimum version 3.0.0-beta9.
+    The core OpenDisplay integration does not provide the drawcustom action.
+
+    Panel labels, weekday abbreviations and the header date line follow the
+    Language input, with per-item overrides under Custom Labels. Clock format
+    and decimal separator are separate inputs, since neither follows from the
+    label language.
+
+    The header date line is built from a token pattern rather than strftime,
+    because Python renders weekday and month names in the C locale and Home
+    Assistant never calls setlocale, so %A and %B are always English. Full
+    weekday and month names are supplied for English only; the other languages
+    use their abbreviation and a numeric month, which keeps the wording correct
+    without shipping 12 unreviewed month names per language. Any language can
+    be given a full pattern through the Header Date Line override.
+
+    Requires Jost-SemiBold.ttf and Jost-Medium.ttf at /config/www/fonts/.
+    Create that directory if it does not exist; it is searched by default but
+    is not created by Home Assistant.
+
+    Jost covers Latin, Latin Extended and Cyrillic only, so the CJK languages
+    need an additional font. Download the matching Noto Sans family from
+    fonts.google.com, put these two files in /config/www/fonts/, then pick the
+    family in the Font input:
+
+      简体中文  ->  NotoSansSC-SemiBold.ttf / NotoSansSC-Medium.ttf
+      日本語    ->  NotoSansJP-SemiBold.ttf / NotoSansJP-Medium.ttf
+      한국어    ->  NotoSansKR-SemiBold.ttf / NotoSansKR-Medium.ttf
+
+    Take those from the static/ folder of the Google Fonts download, not the
+    NotoSansSC[wght].ttf style file in the top level. That one is a variable
+    font, and the drawcustom font option takes a plain path with no way to
+    select a named instance, so it renders at the axis default weight rather
+    than the weight you wanted. A .ttc collection fails for the same reason:
+    no face index can be given.
+
+    Each Noto Sans build also carries Latin, so one file covers the labels,
+    digits and units together. Expect 5-16 MB per weight against 40 KB for
+    Jost; this is rendered on the Home Assistant host, so it costs disk there
+    and nothing on the display.
+
+    If a font is missing the integration logs a warning and silently falls back
+    to its bundled Poppins/Roboto, which have no CJK glyphs, so an unconfigured
+    CJK language renders as empty boxes rather than raising an error. Check the
+    log after the first run.
+  domain: automation
+  input:
+    weather_entity:
+      name: Weather Entity
+      description: >
+        Weather entity supplying current conditions and the daily forecast.
+        Must support the daily forecast type.
+      default: weather.forecast_home
+      selector:
+        entity:
+          filter:
+            - domain: weather
+    location_string:
+      name: Location Name
+      description: "Label displayed at the top of the screen (e.g. 'Chicago, Illinois')"
+      selector:
+        text:
+    language:
+      name: Language
+      description: >
+        Language for the panel labels and weekday abbreviations. Weather data
+        itself is rendered as numbers and icons, so it is language independent.
+      default: en
+      selector:
+        select:
+          options:
+            - {value: en, label: English}
+            - {value: de, label: Deutsch}
+            - {value: nl, label: Nederlands}
+            - {value: fr, label: Français}
+            - {value: es, label: Español}
+            - {value: it, label: Italiano}
+            - {value: pt, label: Português}
+            - {value: sv, label: Svenska}
+            - {value: da, label: Dansk}
+            - {value: nb, label: Norsk bokmål}
+            - {value: pl, label: Polski}
+            - {value: zh-Hans, label: 简体中文 (needs a CJK font)}
+            - {value: ja, label: 日本語 (needs a CJK font)}
+            - {value: ko, label: 한국어 (needs a CJK font)}
+    time_format:
+      name: Clock Format
+      description: >
+        Auto uses a 12-hour clock in America/* time zones and a 24-hour clock
+        everywhere else. Clock convention follows where the display is, not
+        which language it is set to, so this is separate from the Language
+        input. Applies to the header time and the sunrise/sunset rows.
+      default: auto
+      selector:
+        select:
+          options:
+            - {value: auto, label: "Auto (from time zone)"}
+            - {value: "12", label: "12-hour (3:45 PM)"}
+            - {value: "24", label: "24-hour (15:45)"}
+    decimal_separator:
+      name: Decimal Separator
+      description: >
+        Separator for the pressure reading, the only value with decimals.
+        Auto follows the selected language.
+      default: auto
+      selector:
+        select:
+          options:
+            - {value: auto, label: "Auto (from language)"}
+            - {value: period, label: "Period (1.013)"}
+            - {value: comma, label: "Comma (1,013)"}
+    font_family:
+      name: Font
+      description: >
+        Font used for all text. A family name expands to the -SemiBold and
+        -Medium pair in /config/www/fonts/, which is how Jost and the Noto
+        Sans builds are named. The list is not exhaustive: type any other
+        family name, or a filename such as ppb.ttf to use one of the fonts
+        bundled with the integration, or an absolute path. A value that
+        includes a path separator or a .ttf/.otf/.ttc extension is used as
+        given for both weights, so the text will be a single weight.
+      default: Jost
+      selector:
+        select:
+          custom_value: true
+          options:
+            - {value: Jost, label: "Jost — Latin, Latin Extended, Cyrillic"}
+            - {value: NotoSansSC, label: "Noto Sans SC — 简体中文"}
+            - {value: NotoSansJP, label: "Noto Sans JP — 日本語"}
+            - {value: NotoSansKR, label: "Noto Sans KR — 한국어"}
+    device_id:
+      name: Display Device
+      description: "device_id of the OpenDisplay e-paper target for opendisplay.drawcustom"
+      selector:
+        device:
+    label_overrides:
+      name: Custom Labels
+      icon: mdi:translate
+      description: >
+        Optional. Leave a field blank to use the wording for the selected
+        language. Use these to correct a translation, shorten a label that
+        does not fit, or support a language that is not in the list.
+      collapsed: true
+      input:
+        label_sunrise:
+          name: Sunrise
+          default: ""
+          selector:
+            text:
+        label_sunset:
+          name: Sunset
+          default: ""
+          selector:
+            text:
+        label_humidity:
+          name: Humidity
+          default: ""
+          selector:
+            text:
+        label_precipitation:
+          name: Precipitation
+          default: ""
+          selector:
+            text:
+        label_wind:
+          name: Wind
+          default: ""
+          selector:
+            text:
+        label_pressure:
+          name: Pressure
+          default: ""
+          selector:
+            text:
+        label_days:
+          name: Weekday Abbreviations
+          description: >
+            Seven comma-separated abbreviations, Monday first, e.g.
+            MON,TUE,WED,THU,FRI,SAT,SUN. Ignored unless exactly seven are given.
+          default: ""
+          selector:
+            text:
+        label_datefmt:
+          name: Header Date Line
+          description: >
+            Pattern for the line under the location name. Tokens:
+            {weekday} full weekday, {wday} abbreviated weekday, {month} full
+            month, {mon} month number, {mon2} zero-padded month, {day} day,
+            {day2} zero-padded day, {year} year, {ord} English ordinal suffix,
+            {time} time in the selected clock format. Any other text is kept as
+            written. Full weekday and month names exist for English only; other
+            languages fall back to the abbreviation and the month number.
+          default: ""
+          selector:
+            text:
+
+triggers:
+  - trigger: time_pattern
+    hours: /1
+
+actions:
+  - action: weather.get_forecasts
+    data:
+      type: daily
+    target:
+      entity_id: !input weather_entity
+    response_variable: forecast
+  - variables:
+      # _weather is declared first: _cicons below renders against it, and
+      # variables in a block are evaluated in order.
+      _weather: !input weather_entity
+      _location: !input location_string
+      _lang: !input language
+      _o_sunrise: !input label_sunrise
+      _o_sunset: !input label_sunset
+      _o_humidity: !input label_humidity
+      _o_precip: !input label_precipitation
+      _o_wind: !input label_wind
+      _o_pressure: !input label_pressure
+      _o_days: !input label_days
+      _o_datefmt: !input label_datefmt
+      _tf: !input time_format
+      _o_dec: !input decimal_separator
+      # Canned label sets, with any Custom Labels input taking precedence.
+      # Weekday lists are Monday-first to match datetime.weekday().
+      _i18n: >-
+        {%- set t = {
+          'en': {'sunrise': 'Sunrise', 'sunset': 'Sunset', 'humidity': 'Humidity',
+                 'precip': 'Precipitation', 'wind': 'Wind', 'pressure': 'Pressure',
+                 'days': ['MON','TUE','WED','THU','FRI','SAT','SUN']},
+          'de': {'sunrise': 'Sonnenaufgang', 'sunset': 'Sonnenuntergang', 'humidity': 'Luftfeuchtigkeit',
+                 'precip': 'Niederschlag', 'wind': 'Wind', 'pressure': 'Luftdruck',
+                 'days': ['MO','DI','MI','DO','FR','SA','SO']},
+          'nl': {'sunrise': 'Zonsopgang', 'sunset': 'Zonsondergang', 'humidity': 'Luchtvochtigheid',
+                 'precip': 'Neerslag', 'wind': 'Wind', 'pressure': 'Luchtdruk',
+                 'days': ['MA','DI','WO','DO','VR','ZA','ZO']},
+          'fr': {'sunrise': 'Lever du soleil', 'sunset': 'Coucher du soleil', 'humidity': 'Humidité',
+                 'precip': 'Précipitations', 'wind': 'Vent', 'pressure': 'Pression',
+                 'days': ['LUN','MAR','MER','JEU','VEN','SAM','DIM']},
+          'es': {'sunrise': 'Amanecer', 'sunset': 'Atardecer', 'humidity': 'Humedad',
+                 'precip': 'Precipitación', 'wind': 'Viento', 'pressure': 'Presión',
+                 'days': ['LUN','MAR','MIÉ','JUE','VIE','SÁB','DOM']},
+          'it': {'sunrise': 'Alba', 'sunset': 'Tramonto', 'humidity': 'Umidità',
+                 'precip': 'Precipitazioni', 'wind': 'Vento', 'pressure': 'Pressione',
+                 'days': ['LUN','MAR','MER','GIO','VEN','SAB','DOM']},
+          'pt': {'sunrise': 'Nascer do sol', 'sunset': 'Pôr do sol', 'humidity': 'Humidade',
+                 'precip': 'Precipitação', 'wind': 'Vento', 'pressure': 'Pressão',
+                 'days': ['SEG','TER','QUA','QUI','SEX','SÁB','DOM']},
+          'sv': {'sunrise': 'Soluppgång', 'sunset': 'Solnedgång', 'humidity': 'Luftfuktighet',
+                 'precip': 'Nederbörd', 'wind': 'Vind', 'pressure': 'Lufttryck',
+                 'days': ['MÅN','TIS','ONS','TOR','FRE','LÖR','SÖN']},
+          'da': {'sunrise': 'Solopgang', 'sunset': 'Solnedgang', 'humidity': 'Luftfugtighed',
+                 'precip': 'Nedbør', 'wind': 'Vind', 'pressure': 'Lufttryk',
+                 'days': ['MAN','TIR','ONS','TOR','FRE','LØR','SØN']},
+          'nb': {'sunrise': 'Soloppgang', 'sunset': 'Solnedgang', 'humidity': 'Luftfuktighet',
+                 'precip': 'Nedbør', 'wind': 'Vind', 'pressure': 'Lufttrykk',
+                 'days': ['MAN','TIR','ONS','TOR','FRE','LØR','SØN']},
+          'pl': {'sunrise': 'Wschód słońca', 'sunset': 'Zachód słońca', 'humidity': 'Wilgotność',
+                 'precip': 'Opady', 'wind': 'Wiatr', 'pressure': 'Ciśnienie',
+                 'days': ['PON','WT','ŚR','CZW','PT','SOB','ND']},
+          'zh-Hans': {'sunrise': '日出', 'sunset': '日落', 'humidity': '湿度',
+                 'precip': '降水概率', 'wind': '风速', 'pressure': '气压',
+                 'days': ['周一','周二','周三','周四','周五','周六','周日']},
+          'ja': {'sunrise': '日の出', 'sunset': '日の入り', 'humidity': '湿度',
+                 'precip': '降水確率', 'wind': '風速', 'pressure': '気圧',
+                 'days': ['月','火','水','木','金','土','日']},
+          'ko': {'sunrise': '일출', 'sunset': '일몰', 'humidity': '습도',
+                 'precip': '강수확률', 'wind': '풍속', 'pressure': '기압',
+                 'days': ['월','화','수','목','금','토','일']}
+        } -%}
+        {%- set f = {
+          'en': {'date': '{weekday}, {month} {day}{ord} as of {time}', 'dec': '.'},
+          'de': {'date': '{wday} {day2}.{mon2}. um {time}', 'dec': ','},
+          'nl': {'date': '{wday} {day2}-{mon2} om {time}', 'dec': ','},
+          'fr': {'date': '{wday} {day2}/{mon2} à {time}', 'dec': ','},
+          'es': {'date': '{wday} {day2}/{mon2} a las {time}', 'dec': ','},
+          'it': {'date': '{wday} {day2}/{mon2} alle {time}', 'dec': ','},
+          'pt': {'date': '{wday} {day2}/{mon2} às {time}', 'dec': ','},
+          'sv': {'date': '{wday} {day2}-{mon2} kl. {time}', 'dec': ','},
+          'da': {'date': '{wday} {day2}-{mon2} kl. {time}', 'dec': ','},
+          'nb': {'date': '{wday} {day2}-{mon2} kl. {time}', 'dec': ','},
+          'pl': {'date': '{wday} {day2}.{mon2} o {time}', 'dec': ','},
+          'zh-Hans': {'date': '{mon}月{day}日 {wday} {time}', 'dec': '.'},
+          'ja': {'date': '{mon}月{day}日({wday}) {time}現在', 'dec': '.'},
+          'ko': {'date': '{mon}월 {day}일 ({wday}) {time} 기준', 'dec': '.'}
+        } -%}
+        {%- set base = t.get(_lang, t['en']) -%}
+        {%- set fb = f.get(_lang, f['en']) -%}
+        {%- set od = _o_days.split(',') | map('trim') | select | list -%}
+        {{ {
+          'sunrise':  _o_sunrise  or base.sunrise,
+          'sunset':   _o_sunset   or base.sunset,
+          'humidity': _o_humidity or base.humidity,
+          'precip':   _o_precip   or base.precip,
+          'wind':     _o_wind     or base.wind,
+          'pressure': _o_pressure or base.pressure,
+          'days': od if od | length == 7 else base.days,
+          'date_fmt': fb.date,
+          'dec': fb.dec,
+          'wdays': ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+                   if _lang == 'en' else [],
+          'months': ['January','February','March','April','May','June','July',
+                     'August','September','October','November','December']
+                    if _lang == 'en' else []
+        } | tojson }}
+      # Clock convention follows the time zone, not the label language.
+      _12h: >-
+        {{ 'y' if _tf == '12' or (_tf == 'auto'
+           and (now().tzinfo | string).startswith('America/')) else 'n' }}
+      _dec: >-
+        {%- if _o_dec == 'period' -%}.
+        {%- elif _o_dec == 'comma' -%},
+        {%- else -%}{{ _i18n['dec'] }}{%- endif -%}
+      # Header date line. Tokens are substituted longest-first so that
+      # {weekday}/{wday}, {month}/{mon2}/{mon} and {day2}/{day} cannot collide.
+      _header: >-
+        {%- set n = now() -%}
+        {%- set b = _i18n -%}
+        {%- set dd = n.day -%}
+        {%- set sfx = 'th' if 11 <= dd <= 13
+                      else {1: 'st', 2: 'nd', 3: 'rd'}.get(dd % 10, 'th') -%}
+        {%- set tm = n.strftime('%-I:%M %p') if _12h == 'y' else n.strftime('%H:%M') -%}
+        {%- set fmt = _o_datefmt | trim or b['date_fmt'] -%}
+        {{ fmt
+           | replace('{weekday}', (b['wdays'] or b['days'])[n.weekday()])
+           | replace('{month}', b['months'][n.month - 1] if b['months'] else n.month | string)
+           | replace('{wday}', b['days'][n.weekday()])
+           | replace('{day2}', '%02d' | format(dd))
+           | replace('{mon2}', '%02d' | format(n.month))
+           | replace('{year}', n.year | string)
+           | replace('{day}', dd | string)
+           | replace('{mon}', n.month | string)
+           | replace('{ord}', sfx)
+           | replace('{time}', tm) }}
+      _font: !input font_family
+      # A bare family name expands to the -SemiBold/-Medium pair under
+      # /config/www/fonts/. Anything carrying a path separator or a font
+      # extension is passed through untouched, and then serves both weights.
+      _font_main: >-
+        {%- set f = _font | trim -%}
+        {%- if '/' in f or f.split('.')[-1] | lower in ['ttf', 'otf', 'ttc'] -%}
+        {{ f }}
+        {%- else -%}
+        {{ '/config/www/fonts/' ~ f ~ '-SemiBold.ttf' }}
+        {%- endif -%}
+      _font_small: >-
+        {%- set f = _font | trim -%}
+        {%- if '/' in f or f.split('.')[-1] | lower in ['ttf', 'otf', 'ttc'] -%}
+        {{ f }}
+        {%- else -%}
+        {{ '/config/www/fonts/' ~ f ~ '-Medium.ttf' }}
+        {%- endif -%}
+      _cicons: >-
+        {%- macro cond_icon(condition, is_day=true) -%}
+          {%- set m = {
+            'sunny': 'mdi:weather-sunny',
+            'clear-night': 'mdi:weather-night',
+            'partlycloudy': 'mdi:weather-partly-cloudy' if is_day else 'mdi:weather-night-partly-cloudy',
+            'cloudy': 'mdi:weather-cloudy',
+            'fog': 'mdi:weather-fog',
+            'rainy': 'mdi:weather-rainy',
+            'pouring': 'mdi:weather-pouring',
+            'lightning': 'mdi:weather-lightning',
+            'lightning-rainy': 'mdi:weather-lightning-rainy',
+            'snowy': 'mdi:weather-snowy',
+            'snowy-rainy': 'mdi:weather-snowy-rainy',
+            'hail': 'mdi:weather-hail',
+            'windy': 'mdi:weather-windy',
+            'windy-variant': 'mdi:weather-windy-variant',
+            'exceptional': 'mdi:weather-cloudy'
+          } -%}
+          {{ m.get(condition, 'mdi:weather-cloudy') }}
+        {%- endmacro -%}
+        {%- set sun_el = state_attr('sun.sun','elevation') -%}
+        {%- set is_day = sun_el | float(0) > 0 -%}
+        {%- set fc = forecast[_weather].forecast -%}
+        {{ {
+          'current': cond_icon(states(_weather), is_day) | trim,
+          'fc1': cond_icon(fc[1].condition) | trim,
+          'fc2': cond_icon(fc[2].condition) | trim,
+          'fc3': cond_icon(fc[3].condition) | trim,
+          'fc4': cond_icon(fc[4].condition) | trim,
+          'fc5': cond_icon(fc[5].condition) | trim
+        } | tojson }}
+
+  - action: opendisplay.drawcustom
+    data:
+      background: white
+      dither: none
+      rotate: 0
+      payload:
+
+        # =====================
+        # HEADER (y 0–40)
+        # =====================
+        - type: text
+          value: "{{ _location }}"
+          x: 320
+          y: 10
+          size: 26
+          color: black
+          font: "{{ _font_main }}"
+          anchor: mt
+        - type: text
+          value: "{{ _header }}"
+          x: 320
+          y: 35
+          size: 16
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mt
+
+        # =====================
+        # CURRENT — LEFT PANEL (x 0–287, y 37–243)
+        # Weather icon + large temperature
+        # =====================
+        - type: icon
+          value: "{{ _cicons['current'] }}"
+          x: 16
+          y: 72
+          size: 144
+          color: black
+        - type: text
+          value: "{{ state_attr(_weather, 'temperature') | round(0) | int }}°"
+          x: 176
+          y: 104
+          size: 64
+          color: black
+          font: "{{ _font_main }}"
+          anchor: lt
+        - type: text
+          value: "{{ forecast[_weather].forecast[0].temperature | round(0) | int }} /"
+          x: 228
+          y: 184
+          size: 22
+          color: black
+          font: "{{ _font_main }}"
+          anchor: rm
+        - type: text
+          value: "{{ forecast[_weather].forecast[0].templow | round(0) | int }}"
+          x: 236
+          y: 184
+          size: 22
+          color: black
+          font: "{{ _font_main }}"
+          anchor: lm
+
+        # =====================
+        # CURRENT — RIGHT PANEL (x 304–639, y 60–244)
+        # 2-column × 3-row weather details
+        # Left col (x 304–471): Sunrise, Humidity, Precip
+        # Right col (x 472–639): Sunset, Wind, Pressure
+        # Row tops: 66, 120, 174 | icon 28×28 | legend size:13, value size:19
+        # =====================
+
+        # ── LEFT COL ROW 1: Sunrise ──
+        - type: icon
+          value: mdi:weather-sunset-up
+          x: 312
+          y: 72
+          size: 32
+          color: black
+        - type: text
+          value: "{{ _i18n['sunrise'] }}"
+          x: 392
+          y: 78
+          size: 14
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+        - type: text
+          value: >-
+            {{ as_timestamp(state_attr('sun.sun', 'next_rising'))
+               | timestamp_custom('%-I:%M %p' if _12h == 'y' else '%H:%M') }}
+          x: 392
+          y: 100
+          size: 20
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+
+        # ── LEFT COL ROW 2: Humidity ──
+        - type: icon
+          value: mdi:water
+          x: 312
+          y: 128
+          size: 32
+          color: black
+        - type: text
+          value: "{{ _i18n['humidity'] }}"
+          x: 392
+          y: 134
+          size: 14
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+        - type: text
+          value: "{{ state_attr(_weather, 'humidity') | round(0) | int }}%"
+          x: 392
+          y: 156
+          size: 20
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+
+        # ── LEFT COL ROW 3: Precipitation ──
+        - type: icon
+          value: mdi:water-percent
+          x: 312
+          y: 184
+          size: 40
+          color: black
+        - type: text
+          value: "{{ _i18n['precip'] }}"
+          x: 392
+          y: 190
+          size: 14
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+        - type: text
+          value: "{{ forecast[_weather].forecast[1].precipitation_probability | default(0) | int }}%"
+          x: 392
+          y: 212
+          size: 20
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+
+        # ── RIGHT COL ROW 1: Sunset ──
+        - type: icon
+          value: mdi:weather-sunset-down
+          x: 482
+          y: 72
+          size: 32
+          color: black
+        - type: text
+          value: "{{ _i18n['sunset'] }}"
+          x: 562
+          y: 78
+          size: 14
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+        - type: text
+          value: >-
+            {{ as_timestamp(state_attr('sun.sun', 'next_setting'))
+               | timestamp_custom('%-I:%M %p' if _12h == 'y' else '%H:%M') }}
+          x: 562
+          y: 100
+          size: 20
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+
+        # ── RIGHT COL ROW 2: Wind ──
+        - type: icon
+          value: mdi:weather-windy
+          x: 482
+          y: 128
+          size: 32
+          color: black
+        - type: text
+          value: "{{ _i18n['wind'] }}"
+          x: 562
+          y: 134
+          size: 14
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+        - type: text
+          value: "{{ state_attr(_weather, 'wind_speed') | round(0) | int }} {{ state_attr(_weather, 'wind_speed_unit') }}"
+          x: 562
+          y: 156
+          size: 20
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+
+        # ── RIGHT COL ROW 3: Pressure ──
+        - type: icon
+          value: mdi:gauge
+          x: 482
+          y: 184
+          size: 32
+          color: black
+        - type: text
+          value: "{{ _i18n['pressure'] }}"
+          x: 562
+          y: 190
+          size: 14
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+        - type: text
+          value: >-
+            {%- set p = state_attr(_weather, 'pressure') -%}
+            {%- set pu = state_attr(_weather, 'pressure_unit') -%}
+            {%- set dp = {'bar': 3, 'inHg': 2, 'psi': 2}.get(pu, 0) -%}
+            {{ ('%.*f' | format(dp, p)) | replace('.', _dec) }} {{ pu }}
+          x: 562
+          y: 212
+          size: 20
+          color: black
+          font: "{{ _font_small }}"
+          anchor: mm
+
+        # =====================
+        # FORECAST STRIP (y 245–383)
+        # 5 rounded boxes × 120 px | centers: 64, 192, 320, 448, 576
+        # =====================
+        - type: rectangle
+          x_start: 4
+          y_start: 247
+          x_end: 124
+          y_end: 382
+          radius: 16
+          outline: black
+          width: 2
+        - type: rectangle
+          x_start: 132
+          y_start: 247
+          x_end: 252
+          y_end: 382
+          radius: 16
+          outline: black
+          width: 2
+        - type: rectangle
+          x_start: 260
+          y_start: 247
+          x_end: 380
+          y_end: 382
+          radius: 16
+          outline: black
+          width: 2
+        - type: rectangle
+          x_start: 388
+          y_start: 247
+          x_end: 508
+          y_end: 382
+          radius: 16
+          outline: black
+          width: 2
+        - type: rectangle
+          x_start: 516
+          y_start: 247
+          x_end: 636
+          y_end: 382
+          radius: 16
+          outline: black
+          width: 2
+
+        # ─── FORECAST DAY 1 (center x 64) ───
+        - type: text
+          value: "{{ _i18n['days'][as_local(as_datetime(forecast[_weather].forecast[1].datetime)).weekday()] }}"
+          x: 64
+          y: 260
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: mt
+        - type: icon
+          value: "{{ _cicons['fc1'] }}"
+          x: 38
+          y: 280
+          size: 52
+          color: black
+        - type: text
+          value: "{{ forecast[_weather].forecast[1].temperature | round(0) | int }} /"
+          x: 70
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: rm
+        - type: text
+          value: "{{ forecast[_weather].forecast[1].templow | round(0) | int }}"
+          x: 74
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: lm
+
+        # ─── FORECAST DAY 2 (center x 192) ───
+        - type: text
+          value: "{{ _i18n['days'][as_local(as_datetime(forecast[_weather].forecast[2].datetime)).weekday()] }}"
+          x: 192
+          y: 260
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: mt
+        - type: icon
+          value: "{{ _cicons['fc2'] }}"
+          x: 166
+          y: 280
+          size: 52
+          color: black
+        - type: text
+          value: "{{ forecast[_weather].forecast[2].temperature | round(0) | int }} /"
+          x: 198
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: rm
+        - type: text
+          value: "{{ forecast[_weather].forecast[2].templow | round(0) | int }}"
+          x: 202
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: lm
+
+        # ─── FORECAST DAY 3 (center x 320) ───
+        - type: text
+          value: "{{ _i18n['days'][as_local(as_datetime(forecast[_weather].forecast[3].datetime)).weekday()] }}"
+          x: 320
+          y: 260
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: mt
+        - type: icon
+          value: "{{ _cicons['fc3'] }}"
+          x: 294
+          y: 280
+          size: 52
+          color: black
+        - type: text
+          value: "{{ forecast[_weather].forecast[3].temperature | round(0) | int }} /"
+          x: 326
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: rm
+        - type: text
+          value: "{{ forecast[_weather].forecast[3].templow | round(0) | int }}"
+          x: 330
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: lm
+
+        # ─── FORECAST DAY 4 (center x 448) ───
+        - type: text
+          value: "{{ _i18n['days'][as_local(as_datetime(forecast[_weather].forecast[4].datetime)).weekday()] }}"
+          x: 448
+          y: 260
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: mt
+        - type: icon
+          value: "{{ _cicons['fc4'] }}"
+          x: 422
+          y: 280
+          size: 52
+          color: black
+        - type: text
+          value: "{{ forecast[_weather].forecast[4].temperature | round(0) | int }} /"
+          x: 454
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: rm
+        - type: text
+          value: "{{ forecast[_weather].forecast[4].templow | round(0) | int }}"
+          x: 458
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: lm
+
+        # ─── FORECAST DAY 5 (center x 576) ───
+        - type: text
+          value: "{{ _i18n['days'][as_local(as_datetime(forecast[_weather].forecast[5].datetime)).weekday()] }}"
+          x: 576
+          y: 260
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: mt
+        - type: icon
+          value: "{{ _cicons['fc5'] }}"
+          x: 550
+          y: 280
+          size: 52
+          color: black
+        - type: text
+          value: "{{ forecast[_weather].forecast[5].temperature | round(0) | int }} /"
+          x: 582
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: rm
+        - type: text
+          value: "{{ forecast[_weather].forecast[5].templow | round(0) | int }}"
+          x: 586
+          y: 350
+          size: 18
+          color: black
+          font: "{{ _font_main }}"
+          anchor: lm
+
+    target:
+      device_id: !input device_id
+
+mode: restart
