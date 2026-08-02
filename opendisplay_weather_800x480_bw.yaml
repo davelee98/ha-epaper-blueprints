@@ -273,7 +273,7 @@ actions:
           font: "{{ _font_small }}"
           anchor: mm
         - type: text
-          value: "{{ state_attr(_weather, 'wind_speed') | round(0) | int }} mph"
+          value: "{{ state_attr(_weather, 'wind_speed') | round(0) | int }} {{ state_attr(_weather, 'wind_speed_unit') }}"
           x: 702
           y: 195
           size: 25
@@ -297,7 +297,10 @@ actions:
           font: "{{ _font_small }}"
           anchor: mm
         - type: text
-          value: "{{ state_attr(_weather, 'pressure') | round(0) | int }} hPa"
+          value: >-
+            {%- set p = state_attr(_weather, 'pressure') -%}
+            {%- set pu = state_attr(_weather, 'pressure_unit') -%}
+            {{ (p | round(2)) if pu in ['inHg', 'bar', 'psi'] else (p | round(0) | int) }} {{ pu }}
           x: 702
           y: 265
           size: 25
