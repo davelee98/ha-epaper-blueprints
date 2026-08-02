@@ -19,7 +19,11 @@ blueprint:
     Home Assistant does not change.
 
     Requires Jost-SemiBold.ttf and Jost-Medium.ttf at /config/www/fonts/.
-    Non-English labels need glyph coverage in those fonts.
+    Non-English labels need glyph coverage in those fonts. Jost covers Latin,
+    Latin Extended and Cyrillic only, so 简体中文, 日本語 and 한국어 additionally
+    need a CJK font such as Noto Sans SC / JP / KR installed alongside it, with
+    the _font_main and _font_small variables edited to point at it. Without
+    that, those languages render as empty boxes rather than failing.
   domain: automation
   input:
     weather_entity:
@@ -57,6 +61,9 @@ blueprint:
             - {value: da, label: Dansk}
             - {value: nb, label: Norsk bokmål}
             - {value: pl, label: Polski}
+            - {value: zh-Hans, label: 简体中文 (needs a CJK font)}
+            - {value: ja, label: 日本語 (needs a CJK font)}
+            - {value: ko, label: 한국어 (needs a CJK font)}
     device_id:
       name: Display Device
       description: "device_id of the OpenDisplay e-paper target for opendisplay.drawcustom"
@@ -170,7 +177,16 @@ actions:
                  'days': ['MAN','TIR','ONS','TOR','FRE','LØR','SØN']},
           'pl': {'sunrise': 'Wschód słońca', 'sunset': 'Zachód słońca', 'humidity': 'Wilgotność',
                  'precip': 'Opady', 'wind': 'Wiatr', 'pressure': 'Ciśnienie',
-                 'days': ['PON','WT','ŚR','CZW','PT','SOB','ND']}
+                 'days': ['PON','WT','ŚR','CZW','PT','SOB','ND']},
+          'zh-Hans': {'sunrise': '日出', 'sunset': '日落', 'humidity': '湿度',
+                 'precip': '降水概率', 'wind': '风速', 'pressure': '气压',
+                 'days': ['周一','周二','周三','周四','周五','周六','周日']},
+          'ja': {'sunrise': '日の出', 'sunset': '日の入り', 'humidity': '湿度',
+                 'precip': '降水確率', 'wind': '風速', 'pressure': '気圧',
+                 'days': ['月','火','水','木','金','土','日']},
+          'ko': {'sunrise': '일출', 'sunset': '일몰', 'humidity': '습도',
+                 'precip': '강수확률', 'wind': '풍속', 'pressure': '기압',
+                 'days': ['월','화','수','목','금','토','일']}
         } -%}
         {%- set base = t.get(_lang, t['en']) -%}
         {%- set od = _o_days.split(',') | map('trim') | select | list -%}
