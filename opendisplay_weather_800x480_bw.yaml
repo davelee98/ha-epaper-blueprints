@@ -13,10 +13,18 @@ blueprint:
     Requires the OpenDisplay HACS custom integration, minimum version 3.0.0-beta9.
     The core OpenDisplay integration does not provide the drawcustom action.
 
-    Panel labels and weekday abbreviations follow the Language input, with
-    per-label overrides under Custom Labels. The header date line is always
-    English: Python renders weekday and month names in the C locale, which
-    Home Assistant does not change.
+    Panel labels, weekday abbreviations and the header date line follow the
+    Language input, with per-item overrides under Custom Labels. Clock format
+    and decimal separator are separate inputs, since neither follows from the
+    label language.
+
+    The header date line is built from a token pattern rather than strftime,
+    because Python renders weekday and month names in the C locale and Home
+    Assistant never calls setlocale, so %A and %B are always English. Full
+    weekday and month names are supplied for English only; the other languages
+    use their abbreviation and a numeric month, which keeps the wording correct
+    without shipping 12 unreviewed month names per language. Any language can
+    be given a full pattern through the Header Date Line override.
 
     Requires Jost-SemiBold.ttf and Jost-Medium.ttf at /config/www/fonts/.
     Create that directory if it does not exist; it is searched by default but
@@ -87,6 +95,32 @@ blueprint:
             - {value: zh-Hans, label: 简体中文 (needs a CJK font)}
             - {value: ja, label: 日本語 (needs a CJK font)}
             - {value: ko, label: 한국어 (needs a CJK font)}
+    time_format:
+      name: Clock Format
+      description: >
+        Auto uses a 12-hour clock in America/* time zones and a 24-hour clock
+        everywhere else. Clock convention follows where the display is, not
+        which language it is set to, so this is separate from the Language
+        input. Applies to the header time and the sunrise/sunset rows.
+      default: auto
+      selector:
+        select:
+          options:
+            - {value: auto, label: "Auto (from time zone)"}
+            - {value: "12", label: "12-hour (3:45 PM)"}
+            - {value: "24", label: "24-hour (15:45)"}
+    decimal_separator:
+      name: Decimal Separator
+      description: >
+        Separator for the pressure reading, the only value with decimals.
+        Auto follows the selected language.
+      default: auto
+      selector:
+        select:
+          options:
+            - {value: auto, label: "Auto (from language)"}
+            - {value: period, label: "Period (1.013)"}
+            - {value: comma, label: "Comma (1,013)"}
     font_family:
       name: Font
       description: >
@@ -158,6 +192,19 @@ blueprint:
           default: ""
           selector:
             text:
+        label_datefmt:
+          name: Header Date Line
+          description: >
+            Pattern for the line under the location name. Tokens:
+            {weekday} full weekday, {wday} abbreviated weekday, {month} full
+            month, {mon} month number, {mon2} zero-padded month, {day} day,
+            {day2} zero-padded day, {year} year, {ord} English ordinal suffix,
+            {time} time in the selected clock format. Any other text is kept as
+            written. Full weekday and month names exist for English only; other
+            languages fall back to the abbreviation and the month number.
+          default: ""
+          selector:
+            text:
 
 triggers:
   - trigger: time_pattern
@@ -183,6 +230,9 @@ actions:
       _o_wind: !input label_wind
       _o_pressure: !input label_pressure
       _o_days: !input label_days
+      _o_datefmt: !input label_datefmt
+      _tf: !input time_format
+      _o_dec: !input decimal_separator
       # Canned label sets, with any Custom Labels input taking precedence.
       # Weekday lists are Monday-first to match datetime.weekday().
       _i18n: >-
@@ -230,7 +280,24 @@ actions:
                  'precip': '강수확률', 'wind': '풍속', 'pressure': '기압',
                  'days': ['월','화','수','목','금','토','일']}
         } -%}
+        {%- set f = {
+          'en': {'date': '{weekday}, {month} {day}{ord} as of {time}', 'dec': '.'},
+          'de': {'date': '{wday} {day2}.{mon2}. um {time}', 'dec': ','},
+          'nl': {'date': '{wday} {day2}-{mon2} om {time}', 'dec': ','},
+          'fr': {'date': '{wday} {day2}/{mon2} à {time}', 'dec': ','},
+          'es': {'date': '{wday} {day2}/{mon2} a las {time}', 'dec': ','},
+          'it': {'date': '{wday} {day2}/{mon2} alle {time}', 'dec': ','},
+          'pt': {'date': '{wday} {day2}/{mon2} às {time}', 'dec': ','},
+          'sv': {'date': '{wday} {day2}-{mon2} kl. {time}', 'dec': ','},
+          'da': {'date': '{wday} {day2}-{mon2} kl. {time}', 'dec': ','},
+          'nb': {'date': '{wday} {day2}-{mon2} kl. {time}', 'dec': ','},
+          'pl': {'date': '{wday} {day2}.{mon2} o {time}', 'dec': ','},
+          'zh-Hans': {'date': '{mon}月{day}日 {wday} {time}', 'dec': '.'},
+          'ja': {'date': '{mon}月{day}日({wday}) {time}現在', 'dec': '.'},
+          'ko': {'date': '{mon}월 {day}일 ({wday}) {time} 기준', 'dec': '.'}
+        } -%}
         {%- set base = t.get(_lang, t['en']) -%}
+        {%- set fb = f.get(_lang, f['en']) -%}
         {%- set od = _o_days.split(',') | map('trim') | select | list -%}
         {{ {
           'sunrise':  _o_sunrise  or base.sunrise,
@@ -239,8 +306,44 @@ actions:
           'precip':   _o_precip   or base.precip,
           'wind':     _o_wind     or base.wind,
           'pressure': _o_pressure or base.pressure,
-          'days': od if od | length == 7 else base.days
+          'days': od if od | length == 7 else base.days,
+          'date_fmt': fb.date,
+          'dec': fb.dec,
+          'wdays': ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+                   if _lang == 'en' else [],
+          'months': ['January','February','March','April','May','June','July',
+                     'August','September','October','November','December']
+                    if _lang == 'en' else []
         } | tojson }}
+      # Clock convention follows the time zone, not the label language.
+      _12h: >-
+        {{ 'y' if _tf == '12' or (_tf == 'auto'
+           and (now().tzinfo | string).startswith('America/')) else 'n' }}
+      _dec: >-
+        {%- if _o_dec == 'period' -%}.
+        {%- elif _o_dec == 'comma' -%},
+        {%- else -%}{{ _i18n['dec'] }}{%- endif -%}
+      # Header date line. Tokens are substituted longest-first so that
+      # {weekday}/{wday}, {month}/{mon2}/{mon} and {day2}/{day} cannot collide.
+      _header: >-
+        {%- set n = now() -%}
+        {%- set b = _i18n -%}
+        {%- set dd = n.day -%}
+        {%- set sfx = 'th' if 11 <= dd <= 13
+                      else {1: 'st', 2: 'nd', 3: 'rd'}.get(dd % 10, 'th') -%}
+        {%- set tm = n.strftime('%-I:%M %p') if _12h == 'y' else n.strftime('%H:%M') -%}
+        {%- set fmt = _o_datefmt | trim or b['date_fmt'] -%}
+        {{ fmt
+           | replace('{weekday}', (b['wdays'] or b['days'])[n.weekday()])
+           | replace('{month}', b['months'][n.month - 1] if b['months'] else n.month | string)
+           | replace('{wday}', b['days'][n.weekday()])
+           | replace('{day2}', '%02d' | format(dd))
+           | replace('{mon2}', '%02d' | format(n.month))
+           | replace('{year}', n.year | string)
+           | replace('{day}', dd | string)
+           | replace('{mon}', n.month | string)
+           | replace('{ord}', sfx)
+           | replace('{time}', tm) }}
       _font: !input font_family
       # A bare family name expands to the -SemiBold/-Medium pair under
       # /config/www/fonts/. Anything carrying a path separator or a font
@@ -311,10 +414,7 @@ actions:
           font: "{{ _font_main }}"
           anchor: mt
         - type: text
-          value: >-
-            {%- set d = now().day -%}
-            {%- set sfx = 'th' if 11 <= d <= 13 else ('st' if d % 10 == 1 else ('nd' if d % 10 == 2 else ('rd' if d % 10 == 3 else 'th'))) -%}
-            {{ now().strftime('%A, %B ') }}{{ d }}{{ sfx }} as of {{ now().strftime('%-I:%M %p') }}
+          value: "{{ _header }}"
           x: 400
           y: 44
           size: 20
@@ -381,7 +481,9 @@ actions:
           font: "{{ _font_small }}"
           anchor: mm
         - type: text
-          value: "{{ as_timestamp(state_attr('sun.sun', 'next_rising')) | timestamp_custom('%-I:%M %p') }}"
+          value: >-
+            {{ as_timestamp(state_attr('sun.sun', 'next_rising'))
+               | timestamp_custom('%-I:%M %p' if _12h == 'y' else '%H:%M') }}
           x: 490
           y: 125
           size: 25
@@ -453,7 +555,9 @@ actions:
           font: "{{ _font_small }}"
           anchor: mm
         - type: text
-          value: "{{ as_timestamp(state_attr('sun.sun', 'next_setting')) | timestamp_custom('%-I:%M %p') }}"
+          value: >-
+            {{ as_timestamp(state_attr('sun.sun', 'next_setting'))
+               | timestamp_custom('%-I:%M %p' if _12h == 'y' else '%H:%M') }}
           x: 702
           y: 125
           size: 25
@@ -505,7 +609,7 @@ actions:
             {%- set p = state_attr(_weather, 'pressure') -%}
             {%- set pu = state_attr(_weather, 'pressure_unit') -%}
             {%- set dp = {'bar': 3, 'inHg': 2, 'psi': 2}.get(pu, 0) -%}
-            {{ '%.*f' | format(dp, p) }} {{ pu }}
+            {{ ('%.*f' | format(dp, p)) | replace('.', _dec) }} {{ pu }}
           x: 702
           y: 265
           size: 25
