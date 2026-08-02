@@ -249,20 +249,28 @@ blueprint:
         LABEL SIZING
 
         Each detail label is centred between its row icon and the column edge,
-        so the icon sets the width budget and each label is sized on its own
-        wording. Only a label that would run under its icon is stepped down;
-        the rest keep full size. In French, for example, Coucher du soleil
-        shrinks while Vent, Humidité and Pression do not, so the two columns
-        can differ in size.
+        so the icon sets the width budget: 60px of half-width on the 800x480
+        and 48px on the 640x384, less a 5px gap so the text does not touch the
+        icon. Labels are sized individually, so only one that would not fit
+        steps down and the rest keep full size. The two columns can therefore
+        differ in size within a row.
 
-        CJK glyphs are full-em rather than half, so they count double, which
-        still leaves them at full size since the wording is short.
+        Widths come from measured Jost Medium advance widths rather than a flat
+        per-character average, because character counts model this badly:
+        Sonnenaufgang runs 0.53em per character while Luftfeuchtigkeit runs
+        0.42, so a single average either lets the wide words overrun or shrinks
+        the narrow ones needlessly. CJK glyphs are full-em and their wording is
+        short, so those languages stay at full size.
 
-        Text typed into Custom Labels feeds the same calculation, so a long
-        override shrinks only its own row. This is an estimate from character
-        counts, not real text metrics: drawcustom cannot measure a rendered
-        string, so treat it as protection against gross overflow rather than a
-        guarantee.
+        Text typed into Custom Labels has no measured width, so it falls back to
+        0.55em per character, slightly wider than any measured label. That is
+        deliberately conservative: an override will sometimes render a step or
+        two smaller than it strictly needs to, rather than running under the
+        icon.
+
+        The measurements are for Jost. Choosing a different font in the Font
+        input shifts the real widths, so sizing becomes approximate again,
+        though Latin sans faces are close enough that the result stays sane.
 
         FONTS
 
@@ -382,20 +390,20 @@ actions:
                  'days': ['월','화','수','목','금','토','일']}
         } -%}
         {%- set f = {
-          'en': {'date': '{weekday}, {month} {day}{ord} as of {time}', 'dec': '.'},
-          'de': {'date': '{wday} {day2}.{mon2}. um {time}', 'dec': ','},
-          'nl': {'date': '{wday} {day2}-{mon2} om {time}', 'dec': ','},
-          'fr': {'date': '{wday} {day2}/{mon2} à {time}', 'dec': ','},
-          'es': {'date': '{wday} {day2}/{mon2} a las {time}', 'dec': ','},
-          'it': {'date': '{wday} {day2}/{mon2} alle {time}', 'dec': ','},
-          'pt': {'date': '{wday} {day2}/{mon2} às {time}', 'dec': ','},
-          'sv': {'date': '{wday} {day2}-{mon2} kl. {time}', 'dec': ','},
-          'da': {'date': '{wday} {day2}-{mon2} kl. {time}', 'dec': ','},
-          'nb': {'date': '{wday} {day2}-{mon2} kl. {time}', 'dec': ','},
-          'pl': {'date': '{wday} {day2}.{mon2} o {time}', 'dec': ','},
-          'zh-Hans': {'date': '{mon}月{day}日 {wday} {time}', 'dec': '.'},
-          'ja': {'date': '{mon}月{day}日({wday}) {time}現在', 'dec': '.'},
-          'ko': {'date': '{mon}월 {day}일 ({wday}) {time} 기준', 'dec': '.'}
+          'en': {'date': '{weekday}, {month} {day}{ord} as of {time}', 'dec': '.', 'w': [327, 290, 395, 552, 242, 379]},
+          'de': {'date': '{wday} {day2}.{mon2}. um {time}', 'dec': ',', 'w': [690, 781, 672, 588, 242, 409]},
+          'nl': {'date': '{wday} {day2}-{mon2} om {time}', 'dec': ',', 'w': [548, 694, 745, 399, 242, 432]},
+          'fr': {'date': '{wday} {day2}/{mon2} à {time}', 'dec': ',', 'w': [642, 776, 402, 594, 204, 371]},
+          'es': {'date': '{wday} {day2}/{mon2} a las {time}', 'dec': ',', 'w': [447, 436, 431, 573, 288, 329]},
+          'it': {'date': '{wday} {day2}/{mon2} alle {time}', 'dec': ',', 'w': [203, 412, 336, 600, 261, 425]},
+          'pt': {'date': '{wday} {day2}/{mon2} às {time}', 'dec': ',', 'w': [609, 450, 457, 543, 261, 341]},
+          'sv': {'date': '{wday} {day2}-{mon2} kl. {time}', 'dec': ',', 'w': [534, 529, 543, 493, 209, 370]},
+          'da': {'date': '{wday} {day2}-{mon2} kl. {time}', 'dec': ',', 'w': [476, 528, 584, 342, 209, 322]},
+          'nb': {'date': '{wday} {day2}-{mon2} kl. {time}', 'dec': ',', 'w': [535, 528, 543, 342, 209, 371]},
+          'pl': {'date': '{wday} {day2}.{mon2} o {time}', 'dec': ',', 'w': [669, 633, 497, 296, 243, 408]},
+          'zh-Hans': {'date': '{mon}月{day}日 {wday} {time}', 'dec': '.', 'w': [200, 200, 200, 400, 200, 200]},
+          'ja': {'date': '{mon}月{day}日({wday}) {time}現在', 'dec': '.', 'w': [300, 400, 200, 400, 200, 200]},
+          'ko': {'date': '{mon}월 {day}일 ({wday}) {time} 기준', 'dec': '.', 'w': [200, 200, 200, 400, 200, 200]}
         } -%}
         {%- set base = t.get(_lang, t['en']) -%}
         {%- set fb = f.get(_lang, f['en']) -%}
@@ -411,6 +419,14 @@ actions:
           'date_fmt': fb.date,
           'dec': fb.dec,
           'wide': 'y' if _lang in ['zh-Hans', 'ja', 'ko'] else 'n',
+          'w': [
+                 (_o_sunrise | length) * 55 if _o_sunrise else fb.w[0],
+                 (_o_sunset | length) * 55 if _o_sunset else fb.w[1],
+                 (_o_humidity | length) * 55 if _o_humidity else fb.w[2],
+                 (_o_precip | length) * 55 if _o_precip else fb.w[3],
+                 (_o_wind | length) * 55 if _o_wind else fb.w[4],
+                 (_o_pressure | length) * 55 if _o_pressure else fb.w[5]
+          ],
           'wdays': ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
                    if _lang == 'en' else [],
           'months': ['January','February','March','April','May','June','July',
@@ -422,18 +438,21 @@ actions:
         {{ 'y' if _tf == '12' or (_tf == 'auto'
            and (now().tzinfo | string).startswith('America/')) else 'n' }}
       # Each detail label is centred between its row icon and the column edge,
-      # so the icon sets the width budget. Sized per label: only the ones that
-      # would run under the icon shrink. CJK glyphs are full-em, hence em=2.
+      # so the icon sets the width budget: 48px of half-width, less a 5px gap,
+      # giving an 86px label. Halve the budget to get the half-width.
+      # b['w'] holds each label's width in hundredths of an em, measured from
+      # Jost Medium, rather than guessed from a flat per-character average:
+      # Sonnenaufgang runs 0.53em/char where Luftfeuchtigkeit runs 0.42.
+      # CJK glyphs are full-em. Custom Labels fall back to 0.55em per character.
       _lblsizes: >-
         {%- set b = _i18n -%}
-        {%- set em = 2 if b['wide'] == 'y' else 1 -%}
         {{ {
-          'sunrise':  [[14, (192 / ((b['sunrise'] | length) * em)) | int] | min, 9] | max,
-          'sunset':   [[14, (192 / ((b['sunset'] | length) * em)) | int] | min, 9] | max,
-          'humidity': [[14, (192 / ((b['humidity'] | length) * em)) | int] | min, 9] | max,
-          'precip':   [[14, (192 / ((b['precip'] | length) * em)) | int] | min, 9] | max,
-          'wind':     [[14, (192 / ((b['wind'] | length) * em)) | int] | min, 9] | max,
-          'pressure': [[14, (192 / ((b['pressure'] | length) * em)) | int] | min, 9] | max
+          'sunrise':  [[14, (8600 / b['w'][0]) | int] | min, 9] | max,
+          'sunset':   [[14, (8600 / b['w'][1]) | int] | min, 9] | max,
+          'humidity': [[14, (8600 / b['w'][2]) | int] | min, 9] | max,
+          'precip':   [[14, (8600 / b['w'][3]) | int] | min, 9] | max,
+          'wind':     [[14, (8600 / b['w'][4]) | int] | min, 9] | max,
+          'pressure': [[14, (8600 / b['w'][5]) | int] | min, 9] | max
         } | tojson }}
       _dec: >-
         {%- if _o_dec == 'period' -%}.
