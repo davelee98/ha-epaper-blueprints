@@ -13,7 +13,7 @@ blueprint:
         text:
     device_id:
       name: Display Device
-      description: "device_id of the OpenDisplay e-paper target for open_epaper_link.drawcustom"
+      description: "device_id of the OpenDisplay e-paper target for opendisplay.drawcustom"
       selector:
         device:
 
@@ -65,10 +65,10 @@ actions:
           'fc5': cond_icon(fc[5].condition) | trim
         } | tojson }}
 
-  - action: open_epaper_link.drawcustom
+  - action: opendisplay.drawcustom
     data:
       background: white
-      dither: none
+      dither: 0
       rotate: 0
       payload:
 
