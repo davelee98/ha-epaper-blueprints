@@ -19,11 +19,34 @@ blueprint:
     Home Assistant does not change.
 
     Requires Jost-SemiBold.ttf and Jost-Medium.ttf at /config/www/fonts/.
-    Non-English labels need glyph coverage in those fonts. Jost covers Latin,
-    Latin Extended and Cyrillic only, so 简体中文, 日本語 and 한국어 additionally
-    need a CJK font such as Noto Sans SC / JP / KR installed alongside it, with
-    the _font_main and _font_small variables edited to point at it. Without
-    that, those languages render as empty boxes rather than failing.
+    Create that directory if it does not exist; it is searched by default but
+    is not created by Home Assistant.
+
+    Jost covers Latin, Latin Extended and Cyrillic only, so the CJK languages
+    need an additional font. Download the matching Noto Sans family from
+    fonts.google.com, put it in /config/www/fonts/, and edit the _font_main and
+    _font_small variables to point at it:
+
+      简体中文  ->  NotoSansSC-SemiBold.ttf / NotoSansSC-Medium.ttf
+      日本語    ->  NotoSansJP-SemiBold.ttf / NotoSansJP-Medium.ttf
+      한국어    ->  NotoSansKR-SemiBold.ttf / NotoSansKR-Medium.ttf
+
+    Take those from the static/ folder of the Google Fonts download, not the
+    NotoSansSC[wght].ttf style file in the top level. That one is a variable
+    font, and the drawcustom font option takes a plain path with no way to
+    select a named instance, so it renders at the axis default weight rather
+    than the weight you wanted. A .ttc collection fails for the same reason:
+    no face index can be given.
+
+    Each Noto Sans build also carries Latin, so one file covers the labels,
+    digits and units together. Expect 5-16 MB per weight against 40 KB for
+    Jost; this is rendered on the Home Assistant host, so it costs disk there
+    and nothing on the display.
+
+    If a font is missing the integration logs a warning and silently falls back
+    to its bundled Poppins/Roboto, which have no CJK glyphs, so an unconfigured
+    CJK language renders as empty boxes rather than raising an error. Check the
+    log after the first run.
   domain: automation
   input:
     weather_entity:
