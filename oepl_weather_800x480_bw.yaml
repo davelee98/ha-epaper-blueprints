@@ -68,7 +68,7 @@ actions:
   - action: open_epaper_link.drawcustom
     data:
       background: white
-      dither: 1
+      dither: none
       rotate: 0
       payload:
 
