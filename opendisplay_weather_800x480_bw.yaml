@@ -4,6 +4,12 @@ blueprint:
     Current weather + 5-day forecast for an 800x480 black & white e-paper display.
     Pulls data from the selected weather entity and sun.sun.
 
+    Sunrise/sunset and the day/night icon variants come from sun.sun, which
+    always follows the home location set in Home Assistant. If the selected
+    weather entity is for a different location, those sun times will still be
+    for home. Home Assistant allows only one sun entity, so this is not
+    configurable.
+
     Requires the OpenDisplay HACS custom integration, minimum version 3.0.0-beta9.
     The core OpenDisplay integration does not provide the drawcustom action.
 
