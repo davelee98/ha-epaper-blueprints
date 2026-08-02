@@ -24,8 +24,8 @@ blueprint:
 
     Jost covers Latin, Latin Extended and Cyrillic only, so the CJK languages
     need an additional font. Download the matching Noto Sans family from
-    fonts.google.com, put it in /config/www/fonts/, and edit the _font_main and
-    _font_small variables to point at it:
+    fonts.google.com, put these two files in /config/www/fonts/, then pick the
+    family in the Font input:
 
       简体中文  ->  NotoSansSC-SemiBold.ttf / NotoSansSC-Medium.ttf
       日本語    ->  NotoSansJP-SemiBold.ttf / NotoSansJP-Medium.ttf
@@ -87,6 +87,25 @@ blueprint:
             - {value: zh-Hans, label: 简体中文 (needs a CJK font)}
             - {value: ja, label: 日本語 (needs a CJK font)}
             - {value: ko, label: 한국어 (needs a CJK font)}
+    font_family:
+      name: Font
+      description: >
+        Font used for all text. A family name expands to the -SemiBold and
+        -Medium pair in /config/www/fonts/, which is how Jost and the Noto
+        Sans builds are named. The list is not exhaustive: type any other
+        family name, or a filename such as ppb.ttf to use one of the fonts
+        bundled with the integration, or an absolute path. A value that
+        includes a path separator or a .ttf/.otf/.ttc extension is used as
+        given for both weights, so the text will be a single weight.
+      default: Jost
+      selector:
+        select:
+          custom_value: true
+          options:
+            - {value: Jost, label: "Jost — Latin, Latin Extended, Cyrillic"}
+            - {value: NotoSansSC, label: "Noto Sans SC — 简体中文"}
+            - {value: NotoSansJP, label: "Noto Sans JP — 日本語"}
+            - {value: NotoSansKR, label: "Noto Sans KR — 한국어"}
     device_id:
       name: Display Device
       description: "device_id of the OpenDisplay e-paper target for opendisplay.drawcustom"
@@ -222,8 +241,24 @@ actions:
           'pressure': _o_pressure or base.pressure,
           'days': od if od | length == 7 else base.days
         } | tojson }}
-      _font_main: "/config/www/fonts/Jost-SemiBold.ttf"
-      _font_small: "/config/www/fonts/Jost-Medium.ttf"
+      _font: !input font_family
+      # A bare family name expands to the -SemiBold/-Medium pair under
+      # /config/www/fonts/. Anything carrying a path separator or a font
+      # extension is passed through untouched, and then serves both weights.
+      _font_main: >-
+        {%- set f = _font | trim -%}
+        {%- if '/' in f or f.split('.')[-1] | lower in ['ttf', 'otf', 'ttc'] -%}
+        {{ f }}
+        {%- else -%}
+        {{ '/config/www/fonts/' ~ f ~ '-SemiBold.ttf' }}
+        {%- endif -%}
+      _font_small: >-
+        {%- set f = _font | trim -%}
+        {%- if '/' in f or f.split('.')[-1] | lower in ['ttf', 'otf', 'ttc'] -%}
+        {{ f }}
+        {%- else -%}
+        {{ '/config/www/fonts/' ~ f ~ '-Medium.ttf' }}
+        {%- endif -%}
       _cicons: >-
         {%- macro cond_icon(condition, is_day=true) -%}
           {%- set m = {
