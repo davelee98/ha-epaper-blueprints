@@ -2,70 +2,13 @@ blueprint:
   name: "OpenDisplay Weather for 800x480 BW"
   description: >
     Current weather + 5-day forecast for an 800x480 black & white e-paper display.
-    Pulls data from the selected weather entity and sun.sun.
 
-    Sunrise/sunset and the day/night icon variants come from sun.sun, which
-    always follows the home location set in Home Assistant. If the selected
-    weather entity is for a different location, those sun times will still be
-    for home. Home Assistant allows only one sun entity, so this is not
-    configurable.
+    Needs the OpenDisplay HACS custom integration, 3.0.0-beta9 or newer, and
+    Jost-SemiBold.ttf plus Jost-Medium.ttf in /config/www/fonts/. Non-Latin
+    languages need a different font.
 
-    Requires the OpenDisplay HACS custom integration, minimum version 3.0.0-beta9.
-    The core OpenDisplay integration does not provide the drawcustom action.
-
-    Panel labels, weekday abbreviations and the header date line follow the
-    Language input, with per-item overrides under Custom Labels. Clock format
-    and decimal separator are separate inputs, since neither follows from the
-    label language.
-
-    The header date line is built from a token pattern rather than strftime,
-    because Python renders weekday and month names in the C locale and Home
-    Assistant never calls setlocale, so %A and %B are always English. Full
-    weekday and month names are supplied for English only; the other languages
-    use their abbreviation and a numeric month, which keeps the wording correct
-    without shipping 12 unreviewed month names per language. Any language can
-    be given a full pattern through the Header Date Line override.
-
-    The update schedule is set by the two Update Interval inputs, which map
-    onto a single time_pattern trigger. Hours alone gives hourly or slower;
-    setting Hours to "Any hour" and choosing a Minutes value gives sub-hourly.
-    Seconds default to zero whenever minutes are set, so a trigger never fires
-    more than once a minute.
-
-    Note this controls how often Home Assistant renders and sends an image, not
-    how often the tag wakes up. That is the integration's ttl, which this
-    blueprint does not set, so a slower interval reduces images sent rather
-    than radio traffic.
-
-    Requires Jost-SemiBold.ttf and Jost-Medium.ttf at /config/www/fonts/.
-    Create that directory if it does not exist; it is searched by default but
-    is not created by Home Assistant.
-
-    Jost covers Latin, Latin Extended and Cyrillic only, so the CJK languages
-    need an additional font. Download the matching Noto Sans family from
-    fonts.google.com, put these two files in /config/www/fonts/, then pick the
-    family in the Font input:
-
-      简体中文  ->  NotoSansSC-SemiBold.ttf / NotoSansSC-Medium.ttf
-      日本語    ->  NotoSansJP-SemiBold.ttf / NotoSansJP-Medium.ttf
-      한국어    ->  NotoSansKR-SemiBold.ttf / NotoSansKR-Medium.ttf
-
-    Take those from the static/ folder of the Google Fonts download, not the
-    NotoSansSC[wght].ttf style file in the top level. That one is a variable
-    font, and the drawcustom font option takes a plain path with no way to
-    select a named instance, so it renders at the axis default weight rather
-    than the weight you wanted. A .ttc collection fails for the same reason:
-    no face index can be given.
-
-    Each Noto Sans build also carries Latin, so one file covers the labels,
-    digits and units together. Expect 5-16 MB per weight against 40 KB for
-    Jost; this is rendered on the Home Assistant host, so it costs disk there
-    and nothing on the display.
-
-    If a font is missing the integration logs a warning and silently falls back
-    to its bundled Poppins/Roboto, which have no CJK glyphs, so an unconfigured
-    CJK language renders as empty boxes rather than raising an error. Check the
-    log after the first run.
+    Everything else — fonts, languages, scheduling, known limits — is under
+    Reference at the bottom of this form.
   domain: automation
   input:
     weather_entity:
@@ -252,6 +195,96 @@ blueprint:
           default: ""
           selector:
             text:
+
+    reference:
+      name: Reference
+      icon: mdi:information-outline
+      collapsed: true
+      description: >
+        DATA SOURCES
+
+        Sunrise/sunset and the day/night icon variants come from sun.sun, which
+        always follows the home location set in Home Assistant. If the selected
+        weather entity is for a different location, those sun times will still
+        be for home. Home Assistant allows only one sun entity, so this is not
+        configurable.
+
+        INTEGRATION
+
+        Requires the OpenDisplay HACS custom integration, minimum version
+        3.0.0-beta9. The core OpenDisplay integration does not provide the
+        drawcustom action, only upload_image.
+
+        LANGUAGE
+
+        Panel labels, weekday abbreviations and the header date line follow the
+        Language input, with per-item overrides under Custom Labels. Clock
+        format and decimal separator are separate inputs, since neither follows
+        from the label language.
+
+        The header date line is built from a token pattern rather than
+        strftime, because Python renders weekday and month names in the C
+        locale and Home Assistant never calls setlocale, so %A and %B are
+        always English. Full weekday and month names are supplied for English
+        only; the other languages use their abbreviation and a numeric month,
+        which keeps the wording correct without shipping 12 unreviewed month
+        names per language. Any language can be given a full pattern through
+        the Header Date Line override.
+
+        SCHEDULE
+
+        The two Update Interval inputs map onto a single time_pattern trigger.
+        Hours alone gives hourly or slower; setting Hours to "Any hour" and
+        choosing a Minutes value gives sub-hourly. Seconds default to zero
+        whenever minutes are set, so a trigger never fires more than once a
+        minute.
+
+        This governs how often Home Assistant renders and sends an image, not
+        how often the tag wakes up. That is the integration's ttl, which this
+        blueprint does not set, so a slower interval reduces images sent rather
+        than radio traffic.
+
+        FONTS
+
+        Jost-SemiBold.ttf and Jost-Medium.ttf go in /config/www/fonts/. Create
+        that directory if it does not exist; it is searched by default but is
+        not created by Home Assistant.
+
+        Jost covers Latin, Latin Extended and Cyrillic only, so the CJK
+        languages need an additional font. Download the matching Noto Sans
+        family from fonts.google.com, put these two files in
+        /config/www/fonts/, then pick the family in the Font input:
+
+          简体中文  ->  NotoSansSC-SemiBold.ttf / NotoSansSC-Medium.ttf
+          日本語    ->  NotoSansJP-SemiBold.ttf / NotoSansJP-Medium.ttf
+          한국어    ->  NotoSansKR-SemiBold.ttf / NotoSansKR-Medium.ttf
+
+        Take those from the static/ folder of the Google Fonts download, not
+        the NotoSansSC[wght].ttf style file in the top level. That one is a
+        variable font, and the drawcustom font option takes a plain path with
+        no way to select a named instance, so it renders at the axis default
+        weight. A .ttc collection fails for the same reason: no face index can
+        be given.
+
+        Each Noto Sans build also carries Latin, so one file covers the labels,
+        digits and units together. Expect 5-16 MB per weight against 40 KB for
+        Jost; this is rendered on the Home Assistant host, so it costs disk
+        there and nothing on the display.
+
+        If a font is missing the integration logs a warning and silently falls
+        back to its bundled Poppins/Roboto, which have no CJK glyphs, so an
+        unconfigured CJK language renders as empty boxes rather than raising an
+        error. Check the log after the first run.
+
+        KNOWN LIMITS
+
+        Percent signs render as 65% with no locale spacing, numbers carry no
+        thousands separator, and the large temperature shows a bare degree sign
+        with no C or F. Right-to-left and complex scripts entered through
+        Custom Labels will not render correctly: they need bidi reordering and
+        glyph shaping, which PIL only performs when Pillow is built against
+        libraqm.
+      input: {}
 
 triggers:
   - trigger: time_pattern
