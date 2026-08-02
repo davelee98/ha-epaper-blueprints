@@ -300,7 +300,8 @@ actions:
           value: >-
             {%- set p = state_attr(_weather, 'pressure') -%}
             {%- set pu = state_attr(_weather, 'pressure_unit') -%}
-            {{ (p | round(2)) if pu in ['inHg', 'bar', 'psi'] else (p | round(0) | int) }} {{ pu }}
+            {%- set dp = {'bar': 3, 'inHg': 2, 'psi': 2}.get(pu, 0) -%}
+            {{ (p | round(dp)) if dp else (p | round(0) | int) }} {{ pu }}
           x: 702
           y: 265
           size: 25
