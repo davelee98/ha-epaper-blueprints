@@ -2,7 +2,7 @@ blueprint:
   name: "OpenDisplay Weather for 800x480 BW"
   description: >
     Current weather + 5-day forecast for an 800x480 black & white e-paper display.
-    Pulls data from weather.forecast_home and sun.sun.
+    Pulls data from the selected weather entity and sun.sun.
 
     Requires the OpenDisplay HACS custom integration, minimum version 3.0.0-beta9.
     The core OpenDisplay integration does not provide the drawcustom action.
@@ -10,6 +10,16 @@ blueprint:
     Requires Jost-SemiBold.ttf and Jost-Medium.ttf at /config/www/fonts/.
   domain: automation
   input:
+    weather_entity:
+      name: Weather Entity
+      description: >
+        Weather entity supplying current conditions and the daily forecast.
+        Must support the daily forecast type.
+      default: weather.forecast_home
+      selector:
+        entity:
+          filter:
+            - domain: weather
     location_string:
       name: Location Name
       description: "Label displayed at the top of the screen (e.g. 'Chicago, Illinois')"
@@ -30,9 +40,12 @@ actions:
     data:
       type: daily
     target:
-      entity_id: weather.forecast_home
+      entity_id: !input weather_entity
     response_variable: forecast
   - variables:
+      # _weather is declared first: _cicons below renders against it, and
+      # variables in a block are evaluated in order.
+      _weather: !input weather_entity
       _location: !input location_string
       _font_main: "/config/www/fonts/Jost-SemiBold.ttf"
       _font_small: "/config/www/fonts/Jost-Medium.ttf"
@@ -59,9 +72,9 @@ actions:
         {%- endmacro -%}
         {%- set sun_el = state_attr('sun.sun','elevation') -%}
         {%- set is_day = sun_el | float(0) > 0 -%}
-        {%- set fc = forecast['weather.forecast_home'].forecast -%}
+        {%- set fc = forecast[_weather].forecast -%}
         {{ {
-          'current': cond_icon(states('weather.forecast_home'), is_day) | trim,
+          'current': cond_icon(states(_weather), is_day) | trim,
           'fc1': cond_icon(fc[1].condition) | trim,
           'fc2': cond_icon(fc[2].condition) | trim,
           'fc3': cond_icon(fc[3].condition) | trim,
@@ -110,7 +123,7 @@ actions:
           size: 180
           color: black
         - type: text
-          value: "{{ state_attr('weather.forecast_home', 'temperature') | round(0) | int }}°"
+          value: "{{ state_attr(_weather, 'temperature') | round(0) | int }}°"
           x: 220
           y: 130
           size: 80
@@ -118,7 +131,7 @@ actions:
           font: "{{ _font_main }}"
           anchor: lt
         - type: text
-          value: "{{ forecast['weather.forecast_home'].forecast[0].temperature | round(0) | int }} /"
+          value: "{{ forecast[_weather].forecast[0].temperature | round(0) | int }} /"
           x: 285
           y: 230
           size: 28
@@ -126,7 +139,7 @@ actions:
           font: "{{ _font_main }}"
           anchor: rm
         - type: text
-          value: "{{ forecast['weather.forecast_home'].forecast[0].templow | round(0) | int }}"
+          value: "{{ forecast[_weather].forecast[0].templow | round(0) | int }}"
           x: 295
           y: 230
           size: 28
@@ -182,7 +195,7 @@ actions:
           font: "{{ _font_small }}"
           anchor: mm
         - type: text
-          value: "{{ state_attr('weather.forecast_home', 'humidity') | round(0) | int }}%"
+          value: "{{ state_attr(_weather, 'humidity') | round(0) | int }}%"
           x: 490
           y: 195
           size: 25
@@ -206,7 +219,7 @@ actions:
           font: "{{ _font_small }}"
           anchor: mm
         - type: text
-          value: "{{ forecast['weather.forecast_home'].forecast[1].precipitation_probability | default(0) | int }}%"
+          value: "{{ forecast[_weather].forecast[1].precipitation_probability | default(0) | int }}%"
           x: 490
           y: 265
           size: 25
@@ -254,7 +267,7 @@ actions:
           font: "{{ _font_small }}"
           anchor: mm
         - type: text
-          value: "{{ state_attr('weather.forecast_home', 'wind_speed') | round(0) | int }} mph"
+          value: "{{ state_attr(_weather, 'wind_speed') | round(0) | int }} mph"
           x: 702
           y: 195
           size: 25
@@ -278,7 +291,7 @@ actions:
           font: "{{ _font_small }}"
           anchor: mm
         - type: text
-          value: "{{ state_attr('weather.forecast_home', 'pressure') | round(0) | int }} hPa"
+          value: "{{ state_attr(_weather, 'pressure') | round(0) | int }} hPa"
           x: 702
           y: 265
           size: 25
@@ -333,7 +346,7 @@ actions:
 
         # ─── FORECAST DAY 1 (center x 80) ───
         - type: text
-          value: "{{ as_timestamp(forecast['weather.forecast_home'].forecast[1].datetime) | timestamp_custom('%a') | upper }}"
+          value: "{{ as_timestamp(forecast[_weather].forecast[1].datetime) | timestamp_custom('%a') | upper }}"
           x: 80
           y: 325
           size: 22
@@ -347,7 +360,7 @@ actions:
           size: 65
           color: black
         - type: text
-          value: "{{ forecast['weather.forecast_home'].forecast[1].temperature | round(0) | int }} /"
+          value: "{{ forecast[_weather].forecast[1].temperature | round(0) | int }} /"
           x: 87
           y: 437
           size: 22
@@ -355,7 +368,7 @@ actions:
           font: "{{ _font_main }}"
           anchor: rm
         - type: text
-          value: "{{ forecast['weather.forecast_home'].forecast[1].templow | round(0) | int }}"
+          value: "{{ forecast[_weather].forecast[1].templow | round(0) | int }}"
           x: 92
           y: 437
           size: 22
@@ -365,7 +378,7 @@ actions:
 
         # ─── FORECAST DAY 2 (center x 240) ───
         - type: text
-          value: "{{ as_timestamp(forecast['weather.forecast_home'].forecast[2].datetime) | timestamp_custom('%a') | upper }}"
+          value: "{{ as_timestamp(forecast[_weather].forecast[2].datetime) | timestamp_custom('%a') | upper }}"
           x: 240
           y: 325
           size: 22
@@ -379,7 +392,7 @@ actions:
           size: 65
           color: black
         - type: text
-          value: "{{ forecast['weather.forecast_home'].forecast[2].temperature | round(0) | int }} /"
+          value: "{{ forecast[_weather].forecast[2].temperature | round(0) | int }} /"
           x: 247
           y: 437
           size: 22
@@ -387,7 +400,7 @@ actions:
           font: "{{ _font_main }}"
           anchor: rm
         - type: text
-          value: "{{ forecast['weather.forecast_home'].forecast[2].templow | round(0) | int }}"
+          value: "{{ forecast[_weather].forecast[2].templow | round(0) | int }}"
           x: 252
           y: 437
           size: 22
@@ -397,7 +410,7 @@ actions:
 
         # ─── FORECAST DAY 3 (center x 400) ───
         - type: text
-          value: "{{ as_timestamp(forecast['weather.forecast_home'].forecast[3].datetime) | timestamp_custom('%a') | upper }}"
+          value: "{{ as_timestamp(forecast[_weather].forecast[3].datetime) | timestamp_custom('%a') | upper }}"
           x: 400
           y: 325
           size: 22
@@ -411,7 +424,7 @@ actions:
           size: 65
           color: black
         - type: text
-          value: "{{ forecast['weather.forecast_home'].forecast[3].temperature | round(0) | int }} /"
+          value: "{{ forecast[_weather].forecast[3].temperature | round(0) | int }} /"
           x: 407
           y: 437
           size: 22
@@ -419,7 +432,7 @@ actions:
           font: "{{ _font_main }}"
           anchor: rm
         - type: text
-          value: "{{ forecast['weather.forecast_home'].forecast[3].templow | round(0) | int }}"
+          value: "{{ forecast[_weather].forecast[3].templow | round(0) | int }}"
           x: 412
           y: 437
           size: 22
@@ -429,7 +442,7 @@ actions:
 
         # ─── FORECAST DAY 4 (center x 560) ───
         - type: text
-          value: "{{ as_timestamp(forecast['weather.forecast_home'].forecast[4].datetime) | timestamp_custom('%a') | upper }}"
+          value: "{{ as_timestamp(forecast[_weather].forecast[4].datetime) | timestamp_custom('%a') | upper }}"
           x: 560
           y: 325
           size: 22
@@ -443,7 +456,7 @@ actions:
           size: 65
           color: black
         - type: text
-          value: "{{ forecast['weather.forecast_home'].forecast[4].temperature | round(0) | int }} /"
+          value: "{{ forecast[_weather].forecast[4].temperature | round(0) | int }} /"
           x: 567
           y: 437
           size: 22
@@ -451,7 +464,7 @@ actions:
           font: "{{ _font_main }}"
           anchor: rm
         - type: text
-          value: "{{ forecast['weather.forecast_home'].forecast[4].templow | round(0) | int }}"
+          value: "{{ forecast[_weather].forecast[4].templow | round(0) | int }}"
           x: 572
           y: 437
           size: 22
@@ -461,7 +474,7 @@ actions:
 
         # ─── FORECAST DAY 5 (center x 720) ───
         - type: text
-          value: "{{ as_timestamp(forecast['weather.forecast_home'].forecast[5].datetime) | timestamp_custom('%a') | upper }}"
+          value: "{{ as_timestamp(forecast[_weather].forecast[5].datetime) | timestamp_custom('%a') | upper }}"
           x: 720
           y: 325
           size: 22
@@ -475,7 +488,7 @@ actions:
           size: 65
           color: black
         - type: text
-          value: "{{ forecast['weather.forecast_home'].forecast[5].temperature | round(0) | int }} /"
+          value: "{{ forecast[_weather].forecast[5].temperature | round(0) | int }} /"
           x: 727
           y: 437
           size: 22
@@ -483,7 +496,7 @@ actions:
           font: "{{ _font_main }}"
           anchor: rm
         - type: text
-          value: "{{ forecast['weather.forecast_home'].forecast[5].templow | round(0) | int }}"
+          value: "{{ forecast[_weather].forecast[5].templow | round(0) | int }}"
           x: 732
           y: 437
           size: 22
