@@ -13,7 +13,13 @@ blueprint:
     Requires the OpenDisplay HACS custom integration, minimum version 3.0.0-beta9.
     The core OpenDisplay integration does not provide the drawcustom action.
 
+    Panel labels and weekday abbreviations follow the Language input, with
+    per-label overrides under Custom Labels. The header date line is always
+    English: Python renders weekday and month names in the C locale, which
+    Home Assistant does not change.
+
     Requires Jost-SemiBold.ttf and Jost-Medium.ttf at /config/www/fonts/.
+    Non-English labels need glyph coverage in those fonts.
   domain: automation
   input:
     weather_entity:
@@ -31,11 +37,78 @@ blueprint:
       description: "Label displayed at the top of the screen (e.g. 'Chicago, Illinois')"
       selector:
         text:
+    language:
+      name: Language
+      description: >
+        Language for the panel labels and weekday abbreviations. Weather data
+        itself is rendered as numbers and icons, so it is language independent.
+      default: en
+      selector:
+        select:
+          options:
+            - {value: en, label: English}
+            - {value: de, label: Deutsch}
+            - {value: nl, label: Nederlands}
+            - {value: fr, label: Français}
+            - {value: es, label: Español}
+            - {value: it, label: Italiano}
+            - {value: pt, label: Português}
+            - {value: sv, label: Svenska}
+            - {value: da, label: Dansk}
+            - {value: nb, label: Norsk bokmål}
+            - {value: pl, label: Polski}
     device_id:
       name: Display Device
       description: "device_id of the OpenDisplay e-paper target for opendisplay.drawcustom"
       selector:
         device:
+    label_overrides:
+      name: Custom Labels
+      icon: mdi:translate
+      description: >
+        Optional. Leave a field blank to use the wording for the selected
+        language. Use these to correct a translation, shorten a label that
+        does not fit, or support a language that is not in the list.
+      collapsed: true
+      input:
+        label_sunrise:
+          name: Sunrise
+          default: ""
+          selector:
+            text:
+        label_sunset:
+          name: Sunset
+          default: ""
+          selector:
+            text:
+        label_humidity:
+          name: Humidity
+          default: ""
+          selector:
+            text:
+        label_precipitation:
+          name: Precipitation
+          default: ""
+          selector:
+            text:
+        label_wind:
+          name: Wind
+          default: ""
+          selector:
+            text:
+        label_pressure:
+          name: Pressure
+          default: ""
+          selector:
+            text:
+        label_days:
+          name: Weekday Abbreviations
+          description: >
+            Seven comma-separated abbreviations, Monday first, e.g.
+            MON,TUE,WED,THU,FRI,SAT,SUN. Ignored unless exactly seven are given.
+          default: ""
+          selector:
+            text:
 
 triggers:
   - trigger: time_pattern
@@ -53,6 +126,63 @@ actions:
       # variables in a block are evaluated in order.
       _weather: !input weather_entity
       _location: !input location_string
+      _lang: !input language
+      _o_sunrise: !input label_sunrise
+      _o_sunset: !input label_sunset
+      _o_humidity: !input label_humidity
+      _o_precip: !input label_precipitation
+      _o_wind: !input label_wind
+      _o_pressure: !input label_pressure
+      _o_days: !input label_days
+      # Canned label sets, with any Custom Labels input taking precedence.
+      # Weekday lists are Monday-first to match datetime.weekday().
+      _i18n: >-
+        {%- set t = {
+          'en': {'sunrise': 'Sunrise', 'sunset': 'Sunset', 'humidity': 'Humidity',
+                 'precip': 'Precipitation', 'wind': 'Wind', 'pressure': 'Pressure',
+                 'days': ['MON','TUE','WED','THU','FRI','SAT','SUN']},
+          'de': {'sunrise': 'Sonnenaufgang', 'sunset': 'Sonnenuntergang', 'humidity': 'Luftfeuchtigkeit',
+                 'precip': 'Niederschlag', 'wind': 'Wind', 'pressure': 'Luftdruck',
+                 'days': ['MO','DI','MI','DO','FR','SA','SO']},
+          'nl': {'sunrise': 'Zonsopgang', 'sunset': 'Zonsondergang', 'humidity': 'Luchtvochtigheid',
+                 'precip': 'Neerslag', 'wind': 'Wind', 'pressure': 'Luchtdruk',
+                 'days': ['MA','DI','WO','DO','VR','ZA','ZO']},
+          'fr': {'sunrise': 'Lever du soleil', 'sunset': 'Coucher du soleil', 'humidity': 'Humidité',
+                 'precip': 'Précipitations', 'wind': 'Vent', 'pressure': 'Pression',
+                 'days': ['LUN','MAR','MER','JEU','VEN','SAM','DIM']},
+          'es': {'sunrise': 'Amanecer', 'sunset': 'Atardecer', 'humidity': 'Humedad',
+                 'precip': 'Precipitación', 'wind': 'Viento', 'pressure': 'Presión',
+                 'days': ['LUN','MAR','MIÉ','JUE','VIE','SÁB','DOM']},
+          'it': {'sunrise': 'Alba', 'sunset': 'Tramonto', 'humidity': 'Umidità',
+                 'precip': 'Precipitazioni', 'wind': 'Vento', 'pressure': 'Pressione',
+                 'days': ['LUN','MAR','MER','GIO','VEN','SAB','DOM']},
+          'pt': {'sunrise': 'Nascer do sol', 'sunset': 'Pôr do sol', 'humidity': 'Humidade',
+                 'precip': 'Precipitação', 'wind': 'Vento', 'pressure': 'Pressão',
+                 'days': ['SEG','TER','QUA','QUI','SEX','SÁB','DOM']},
+          'sv': {'sunrise': 'Soluppgång', 'sunset': 'Solnedgång', 'humidity': 'Luftfuktighet',
+                 'precip': 'Nederbörd', 'wind': 'Vind', 'pressure': 'Lufttryck',
+                 'days': ['MÅN','TIS','ONS','TOR','FRE','LÖR','SÖN']},
+          'da': {'sunrise': 'Solopgang', 'sunset': 'Solnedgang', 'humidity': 'Luftfugtighed',
+                 'precip': 'Nedbør', 'wind': 'Vind', 'pressure': 'Lufttryk',
+                 'days': ['MAN','TIR','ONS','TOR','FRE','LØR','SØN']},
+          'nb': {'sunrise': 'Soloppgang', 'sunset': 'Solnedgang', 'humidity': 'Luftfuktighet',
+                 'precip': 'Nedbør', 'wind': 'Vind', 'pressure': 'Lufttrykk',
+                 'days': ['MAN','TIR','ONS','TOR','FRE','LØR','SØN']},
+          'pl': {'sunrise': 'Wschód słońca', 'sunset': 'Zachód słońca', 'humidity': 'Wilgotność',
+                 'precip': 'Opady', 'wind': 'Wiatr', 'pressure': 'Ciśnienie',
+                 'days': ['PON','WT','ŚR','CZW','PT','SOB','ND']}
+        } -%}
+        {%- set base = t.get(_lang, t['en']) -%}
+        {%- set od = _o_days.split(',') | map('trim') | select | list -%}
+        {{ {
+          'sunrise':  _o_sunrise  or base.sunrise,
+          'sunset':   _o_sunset   or base.sunset,
+          'humidity': _o_humidity or base.humidity,
+          'precip':   _o_precip   or base.precip,
+          'wind':     _o_wind     or base.wind,
+          'pressure': _o_pressure or base.pressure,
+          'days': od if od | length == 7 else base.days
+        } | tojson }}
       _font_main: "/config/www/fonts/Jost-SemiBold.ttf"
       _font_small: "/config/www/fonts/Jost-Medium.ttf"
       _cicons: >-
@@ -169,7 +299,7 @@ actions:
           size: 40
           color: black
         - type: text
-          value: "Sunrise"
+          value: "{{ _i18n['sunrise'] }}"
           x: 490
           y: 98
           size: 18
@@ -193,7 +323,7 @@ actions:
           size: 40
           color: black
         - type: text
-          value: "Humidity"
+          value: "{{ _i18n['humidity'] }}"
           x: 490
           y: 168
           size: 18
@@ -217,7 +347,7 @@ actions:
           size: 50
           color: black
         - type: text
-          value: "Precipitation"
+          value: "{{ _i18n['precip'] }}"
           x: 490
           y: 238
           size: 18
@@ -241,7 +371,7 @@ actions:
           size: 40
           color: black
         - type: text
-          value: "Sunset"
+          value: "{{ _i18n['sunset'] }}"
           x: 702
           y: 98
           size: 18
@@ -265,7 +395,7 @@ actions:
           size: 40
           color: black
         - type: text
-          value: "Wind"
+          value: "{{ _i18n['wind'] }}"
           x: 702
           y: 168
           size: 18
@@ -289,7 +419,7 @@ actions:
           size: 40
           color: black
         - type: text
-          value: "Pressure"
+          value: "{{ _i18n['pressure'] }}"
           x: 702
           y: 238
           size: 18
@@ -356,7 +486,7 @@ actions:
 
         # ─── FORECAST DAY 1 (center x 80) ───
         - type: text
-          value: "{{ as_timestamp(forecast[_weather].forecast[1].datetime) | timestamp_custom('%a') | upper }}"
+          value: "{{ _i18n['days'][as_local(as_datetime(forecast[_weather].forecast[1].datetime)).weekday()] }}"
           x: 80
           y: 325
           size: 22
@@ -388,7 +518,7 @@ actions:
 
         # ─── FORECAST DAY 2 (center x 240) ───
         - type: text
-          value: "{{ as_timestamp(forecast[_weather].forecast[2].datetime) | timestamp_custom('%a') | upper }}"
+          value: "{{ _i18n['days'][as_local(as_datetime(forecast[_weather].forecast[2].datetime)).weekday()] }}"
           x: 240
           y: 325
           size: 22
@@ -420,7 +550,7 @@ actions:
 
         # ─── FORECAST DAY 3 (center x 400) ───
         - type: text
-          value: "{{ as_timestamp(forecast[_weather].forecast[3].datetime) | timestamp_custom('%a') | upper }}"
+          value: "{{ _i18n['days'][as_local(as_datetime(forecast[_weather].forecast[3].datetime)).weekday()] }}"
           x: 400
           y: 325
           size: 22
@@ -452,7 +582,7 @@ actions:
 
         # ─── FORECAST DAY 4 (center x 560) ───
         - type: text
-          value: "{{ as_timestamp(forecast[_weather].forecast[4].datetime) | timestamp_custom('%a') | upper }}"
+          value: "{{ _i18n['days'][as_local(as_datetime(forecast[_weather].forecast[4].datetime)).weekday()] }}"
           x: 560
           y: 325
           size: 22
@@ -484,7 +614,7 @@ actions:
 
         # ─── FORECAST DAY 5 (center x 720) ───
         - type: text
-          value: "{{ as_timestamp(forecast[_weather].forecast[5].datetime) | timestamp_custom('%a') | upper }}"
+          value: "{{ _i18n['days'][as_local(as_datetime(forecast[_weather].forecast[5].datetime)).weekday()] }}"
           x: 720
           y: 325
           size: 22
